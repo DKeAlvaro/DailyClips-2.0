@@ -4,7 +4,7 @@ import { h, $, icon, countUp } from './dom.js';
 import { S, streak, addDays } from './store.js';
 import { api } from './api.js';
 import { ctx, now, currentDay } from './ctx.js';
-import { t, fmtDay, lang } from './i18n.js';
+import { t } from './i18n.js';
 import { band } from './words.js';
 import { shareResult } from './share.js';
 import { googleButton, oneTap, loginAvailable, signedIn } from './auth.js';
@@ -33,8 +33,8 @@ export function standing(stats, score) {
 
 /** Everyone's score on a 0-100 line: one dot per person while they are few, bars when they are many. */
 export function strip(stats, { me = null, vs = null } = {}) {
-  const box = h('div.strip', h('div.axis'));
-  for (const v of [0, 50, 100]) box.append(h('span.tick', { style: { left: v + '%' } }, String(v)));
+  const box = h('div.strip', h('div.axis'), h('span.tick', '0'), h('span.tick.end', '100'));
+  const x = (v) => 3 + v * 0.94 + '%'; // 0-100 on 3-97 %, so a dot at either end stays whole
   const people = [];
   for (const [k, v] of Object.entries(stats.scores || {})) for (let i = 0; i < v; i++) people.push(Number(k));
   if (me != null && !people.includes(me)) people.push(me);
@@ -44,7 +44,7 @@ export function strip(stats, { me = null, vs = null } = {}) {
     for (const p of people) bins[Math.min(9, Math.floor(p / 10))]++;
     const max = Math.max(...bins);
     bins.forEach((b, i) => box.append(h('div.bar' + (me != null && Math.min(9, Math.floor(me / 10)) === i ? '.me' : ''),
-      { style: { left: i * 10 + '%', height: Math.round((b / max) * 32) + 'px' } })));
+      { style: { left: x(i * 10), height: Math.round((b / max) * 32) + 'px' } })));
     return box;
   }
   const rows = [];
@@ -55,7 +55,7 @@ export function strip(stats, { me = null, vs = null } = {}) {
     rows[r] = p;
     let cls = '';
     if (!meDone && p === me) { cls = '.me'; meDone = true; } else if (!vsDone && p === vs) { cls = '.vs'; vsDone = true; }
-    box.append(h('div.dot' + cls, { style: { left: p + '%', bottom: 12 + r * 12 + (cls === '.me' ? -2 : 0) + 'px' } }));
+    box.append(h('div.dot' + cls, { style: { left: x(p), bottom: 12 + r * 12 + (cls === '.me' ? -2 : 0) + 'px' } }));
   }
   return box;
 }
@@ -78,7 +78,7 @@ function tomorrow() {
     return h('div.r', h('button.btn.sm', { style: { color: 'var(--pink)', 'border-color': 'var(--pink)', padding: '0 14px', flex: 'none' }, onclick: () => ctx.act.openClip(ctx.today) }, t('today_clip'), icon('next')));
   }
   const count = h('div.count', '--:--:--');
-  const box = h('div.r', h('div.lbl', t('next_in')), count);
+  const box = h('div.r', h('div.k', t('next_in')), count);
   const tick = () => {
     const left = Math.max(0, ctx.nextAt - now());
     if (left <= 0) {
@@ -99,17 +99,14 @@ function tomorrow() {
 function ticket(rec, { fresh, practiceScore }) {
   const clip = ctx.clip, st = streak(currentDay());
   const big = h('span.big' + (band(rec.score) === 'c' ? '.c-h' : band(rec.score) === 'm' ? '.m-h' : ''), fresh ? '0' : String(rec.score));
-  const tierName = { web: 'web', dev: lang() === 'es' ? 'dispositivo' : 'device', pro: 'pro' }[rec.tier] || 'web';
+  // title, the score, one bar per line (taller = better), then the stub: streak and the next clip
   const node = h('div.ticket', { id: 'ticket' },
-    h('div.thead', h('span.lbl', 'DailyClips · ' + fmtDay(clip.day, { day: 'numeric', month: 'short', year: 'numeric' })), h('span.lbl', 'Nº ' + String(clip.n).padStart(3, '0'))),
     h('div.ttitle', clip.title),
-    h('div.tscore', big, h('small', '/100 · ' + t('ticket_level', { l: tierName }))),
-    h('div.verdict.' + band(rec.score), practiceScore != null ? `${t('practice_again')}: ${practiceScore}` : verdict(rec.score)),
-    h('div.rsegs', rec.phrases.map((v, i) => h('div.rseg.' + band(v), { style: { '--i': i } }, h('i'), String(v)))),
+    h('div.tscore', big, h('div.verdict.' + band(practiceScore != null ? practiceScore : rec.score), practiceScore != null ? t('practice_stamp', { n: practiceScore }) : verdict(rec.score))),
+    h('div.rsegs', { 'aria-hidden': 'true' }, rec.phrases.map((v, i) => h('div.rseg.' + band(v), { style: { '--i': i, '--v': Math.max(8, v) / 100 } }, h('i')))),
     h('div.tear'),
     h('div.stub',
-      h('div', h('div.lbl', st.current > 1 ? t('streak_n', { n: st.current }) : st.current === 1 ? t('streak_1') : t('no_streak')),
-        h('div.n', icon('flame'), String(st.current), weekDots())),
+      h('div', h('div.k', t('streak')), h('div.n', icon('flame'), String(st.current), weekDots())),
       tomorrow()));
   return { node, big };
 }
@@ -119,13 +116,10 @@ function standingSection(box) {
   box.textContent = '';
   if (!stats) return;
   const st = standing(stats, rec.score);
-  const total = Math.max(st.total, 1);
+  const total = Math.max(st.total, st.pos, 1); // a result still on its way to the server is not in the table yet
   box.append(h('h3', { html: total <= 1 ? t('among_1') : t('among', { pos: st.pos, n: total }) }));
-  if (total > 1) {
-    box.append(h('p.sub', [total >= 20 && st.below ? t('better_than', { p: Math.round((st.below / (total - 1)) * 100) }) : null,
-      stats.avg != null ? t('avg', { n: stats.avg }) : null].filter(Boolean).join(' · ')));
-  }
-  box.append(strip(stats, { me: rec.score, vs: ctx.vs && ctx.vs.score }), h('button.more', { onclick: () => openRank() }, t('see_ranking') + ' →'));
+  // alone on the board there is nothing to plot or rank yet
+  if (total > 1) box.append(strip(stats, { me: rec.score, vs: ctx.vs && ctx.vs.score }), h('button.more', { onclick: () => openRank() }, t('see_ranking') + ' →'));
 }
 
 function duelSection(rec) {
@@ -149,20 +143,17 @@ export function showResult({ fresh = false, practiceScore = null, keepScroll = f
   hideResult();
   const tk = ticket(rec, { fresh, practiceScore });
   const stand = h('div.sec');
-  const q = lang() === 'en' ? '?l=en' : '';
   el = h('div.result', { id: 'result' },
     tk.node,
     h('div.cta', h('button.btn.pri', { onclick: shareResult, id: 'share' }, icon('share'), t('share'))),
     stand,
     duelSection(rec),
     loginAvailable() && !signedIn()
-      ? h('div.sec', { id: 'loginpanel' }, h('h3', t('save_streak')), h('p.sub', t('save_sub')), h('div.gbtn', { id: 'gbtn' }))
+      ? h('div.sec', { id: 'loginpanel' }, h('h3', t('save_streak')), h('div.gbtn', { id: 'gbtn' }))
       : null,
     h('div.links',
       h('button', { onclick: () => ctx.act.practice() }, t('practice_again')),
-      h('button', { onclick: () => openArchive() }, t('past_clips')),
-      clip.src ? h('a', { href: `https://www.youtube.com/watch?v=${clip.yt}`, target: '_blank', rel: 'noopener' }, t('src', { ch: clip.src })) : null,
-      h('a', { href: '/privacy/' + q }, t('privacy')), h('a', { href: '/terms/' + q }, t('terms'))));
+      h('button', { onclick: () => openArchive() }, t('past_clips'))));
   $('#app').append(el);
   if (keepScroll) {
     el.scrollTop = scroll;

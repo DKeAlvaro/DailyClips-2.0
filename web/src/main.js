@@ -161,19 +161,18 @@ function rerender() {
 
 function renderStart() {
   const clip = ctx.clip, isToday = clip.n === ctx.today;
-  const people = ctx.count === 1 ? t('people_today_1') : ctx.count ? t(isToday ? 'people_today' : 'people_did', { n: ctx.count }) : '';
-  const newcomer = !Object.keys(S.results).length && !ctx.vs;
+  // a head count only says something once there is a crowd
+  const people = ctx.count >= 5 ? t(isToday ? 'people_today' : 'people_did', { n: ctx.count }) : '';
   if (playBtn) playBtn.remove();
   playBtn = h('div.playbtn', { style: { position: 'absolute', transform: 'translate(-50%,-50%)', margin: 0, 'pointer-events': 'none', 'z-index': 3 } }, icon('play'));
   stage.append(playBtn);
   deck.className = 'deck';
-  // what it is (kicker, title, where it is from), then either how it works (first visit) or who is in
+  // what it is (kicker, title) and one line of where it is from; the play button says the rest
   clear(deck, h('div.start',
     ctx.vs && h('div.vsline', { html: t('vs_line', { name: ctx.vs.name, score: ctx.vs.score }) }),
-    h('div', h('div.kicker', ctx.practiceArmed ? t('practice_mode') : isToday ? `${t('today_clip')} · Nº ${clip.n}` : `Nº ${clip.n} · ${fmtDay(clip.day)}`)),
+    h('div', h('div.kicker', ctx.practiceArmed ? t('practice_mode') : isToday ? t('today_clip') : fmtDay(clip.day))),
     h('h1.title', clip.title),
-    h('div.meta', [clip.src, t('lines', { n: ctx.units.length }), people].filter(Boolean).join(' · ')),
-    newcomer && h('ol.how', h('li', t('how1')), h('li', t('how2')), h('li', t('how3')))));
+    h('div.meta', [clip.src, t('lines', { n: ctx.units.length }), people].filter(Boolean).join(' · '))));
   layoutStage();
 }
 
@@ -445,28 +444,29 @@ function renderCard(msg) {
     const r = res && res.words[j];
     phrase.append(h('span.w' + (r ? '.' + (r.s == null ? 'n' : r.c) : ''), { style: { '--i': j }, onclick: r ? () => showTip(tip, r) : null }, w), j < words.length - 1 ? ' ' : '');
   });
-  // takes: three dots, the filled ones are spent
-  const takes = (used, label) => h('div.takes', [0, 1, 2].slice(0, MAX_TAKES).map((k) => h('i' + (k < used ? '.used' : ''))), h('span.lbl', label));
+  // takes left: filled dots, like lives (free practice has no limit, so no dots)
+  const left = Math.max(0, MAX_TAKES - s.takes[i]);
+  const dots = () => (s.practice ? null : h('span.dots', { role: 'img', 'aria-label': t('takes_left', { n: left }) }, [0, 1, 2].slice(0, MAX_TAKES).map((k) => h('i' + (k < left ? '.on' : '')))));
   deck.className = 'deck ' + mode + ' t-' + activeTier(u);
   const kids = [phrase];
   if (mode === 'prompt') {
-    kids.push(msg || !S.seen.mic ? h('p.hint', { html: msg || t('your_turn') }) : takes(s.takes[i], s.practice ? t('practice_mode') : t('take_of', { a: Math.min(MAX_TAKES, s.takes[i] + 1), b: MAX_TAKES })),
+    kids.push(msg || !S.seen.mic ? h('p.hint', { html: msg || t('your_turn') }) : null,
       h('div.ctrl',
-        h('button.side', { onclick: () => playUnit(i, { replay: true }), 'aria-label': t('again') }, icon('replay'), h('small', t('again'))),
+        h('button.side', { onclick: () => playUnit(i, { replay: true }), 'aria-label': t('again') }, icon('replay')),
         h('button.mic', { onclick: startListening, 'aria-label': 'mic', id: 'mic' }, icon('mic')),
-        h('button.side', { onclick: () => playUnit(i, { replay: true, slow: true }), 'aria-label': t('slow') }, '0.75×', h('small', t('slow')))));
+        h('button.side', { onclick: () => playUnit(i, { replay: true, slow: true }), 'aria-label': t('slow') }, '0.75×'),
+        dots()));
   } else if (mode === 'listening' || mode === 'scoring') {
     kids.push(h('p.hint', t(mode === 'listening' ? 'listening' : 'scoring')),
       h('div.ctrl', { style: { 'justify-content': 'center' } },
         h('button.mic', { onclick: () => s.handle && s.handle.stop(), 'aria-label': 'stop', id: 'mic' }, icon('stop'))));
   } else if (mode === 'feedback') {
-    const left = MAX_TAKES - s.takes[i], last = i === s.units.length - 1;
-    const better = s.best[i] > res.score ? ` · ${t('best_is', { n: s.best[i] })}` : '';
+    const last = i === s.units.length - 1;
     kids.push(
-      h('div.fb', h('div.stamp.fbscore.' + band(res.score) + '-t', String(res.score)), tip),
-      takes(s.takes[i], s.practice ? t('practice_mode') : `${t('take_of', { a: s.takes[i], b: MAX_TAKES })} · ${t('best_counts')}${better}`),
+      h('div.fb', h('div.stamp.fbscore.' + band(res.score) + '-t', String(res.score)),
+        h('div.fbtxt', tip, s.best[i] > res.score ? h('p.keep', { html: t('best_is', { n: s.best[i] }) }) : null)),
       h('div.btns',
-        h('button.btn', { disabled: !s.practice && left <= 0, onclick: () => playUnit(i, { replay: true }) }, icon('replay'), t('retry')),
+        h('button.btn', { disabled: !s.practice && left <= 0, onclick: () => playUnit(i, { replay: true }) }, icon('replay'), t('retry'), dots()),
         h('button.btn.' + (res.score >= 50 || left <= 0 ? 'pri' : 'wht'), { onclick: next, id: 'next' }, t(last ? 'finish' : 'next'), icon('next'))));
     const worst = res.words.filter((w) => w.c !== 'g' && w.s != null).sort((a, b) => a.s - b.s)[0];
     if (worst) showTip(tip, worst);
