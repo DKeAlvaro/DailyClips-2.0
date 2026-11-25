@@ -47,6 +47,8 @@ MAX_PHONES = 200
 VOCAB = json.load(open(HERE / "vocab.json", encoding="utf-8"))
 ID2PH = {v: k for k, v in VOCAB.items()}
 
+if hasattr(ort, "disable_telemetry_events"):
+    ort.disable_telemetry_events()
 so = ort.SessionOptions()
 so.intra_op_num_threads = THREADS
 so.inter_op_num_threads = 1

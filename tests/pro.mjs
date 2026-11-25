@@ -1,0 +1,186 @@
+#!/usr/bin/env node
+// Pro, end to end, against a staging instance whose Stripe keys are TEST keys:
+//   without Pro the scoring endpoint refuses · pay with a test card in Stripe Checkout · the account
+//   becomes Pro and the server scores a take · cancel from the app (Pro stays until the period ends) ·
+//   the period ends (subscription deleted through the API) and the endpoint refuses again.
+//
+//   node tests/pro.mjs --base https://staging.example --secret <DC_TEST_AUTH> --stripe-key sk_test_... [--headed]
+import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
+import { launch, speak } from './lib/browser.mjs';
+
+const arg = (name, def) => {
+  const i = process.argv.indexOf('--' + name);
+  return i < 0 ? def : process.argv[i + 1] && !process.argv[i + 1].startsWith('--') ? process.argv[i + 1] : true;
+};
+const base = String(arg('base', '')).replace(/\/$/, '');
+const secret = arg('secret', '');
+const stripeKey = String(arg('stripe-key', ''));
+const shots = arg('shots', 'work/pro-shots');
+if (!base || !secret || !stripeKey.startsWith('sk_test_')) {
+  console.error('needs --base, --secret and a TEST --stripe-key');
+  process.exit(2);
+}
+fs.mkdirSync(shots, { recursive: true });
+
+let failed = 0;
+const t0 = Date.now();
+const stamp = () => ((Date.now() - t0) / 1000).toFixed(1).padStart(5) + 's';
+const ok = (cond, what, extra = '') => {
+  if (!cond) failed++;
+  console.log(`${stamp()} ${cond ? 'PASS' : 'FAIL'}  ${what}${extra ? '  (' + extra + ')' : ''}`);
+};
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const stripe = async (method, p) => (await fetch('https://api.stripe.com/v1' + p, { method, headers: { Authorization: 'Bearer ' + stripeKey } })).json();
+
+const health = await (await fetch(base + '/api/health')).json();
+const { clip } = await (await fetch(`${base}/api/clip/${health.today}`)).json();
+const idx = clip.phrases.findIndex((p) => !p.skip && p.ph);
+const unit = clip.phrases[idx];
+// a native voice saying the first line: 16 kHz for the API, 48 kHz for the fake microphone
+const dir = path.resolve('work/pro-audio');
+fs.mkdirSync(dir, { recursive: true });
+const jobs = [
+  { text: unit.text, voice: 'en-US-GuyNeural', out: path.join(dir, 'api.wav'), rate: 16000, pad: 0.3 },
+  { text: unit.text, voice: 'en-US-GuyNeural', out: path.join(dir, 'mic.wav'), rate: 48000, pad: 0.7 },
+];
+fs.writeFileSync(path.join(dir, 'jobs.json'), JSON.stringify(jobs));
+spawnSync('python', ['tools/tts.py', path.join(dir, 'jobs.json')], { windowsHide: true });
+const wav = fs.readFileSync(jobs[0].out);
+const pcm = wav.subarray(wav.indexOf('data') + 8);
+console.log(`${stamp()} ${base} · clip #${clip.n}, line "${unit.text}" (${(pcm.length / 32000).toFixed(1)} s of audio)`);
+
+const { context, page } = await launch({ headless: !arg('headed', false) });
+const errors = [];
+const proCalls = [];
+page.on('pageerror', (e) => errors.push(e.message));
+page.on('dialog', (d) => d.accept());
+page.on('response', (r) => {
+  if (r.url().includes('/api/pro/score')) proCalls.push(r.status());
+});
+await page.goto(base + '/', { waitUntil: 'domcontentloaded' });
+await page.waitForSelector('.app.ready', { timeout: 20000 });
+const sub = 'pro-' + Date.now().toString(36);
+const user = await page.evaluate(([s, id]) => window.dcTestLogin(s, id, 'Pagador'), [secret, sub]);
+const token = await page.evaluate(() => JSON.parse(localStorage.getItem('dailyclips.v2')).token);
+const me = async () => (await (await fetch(base + '/api/me', { headers: { Authorization: 'Bearer ' + token } })).json()).user;
+const score = async () => {
+  const t = Date.now();
+  const r = await fetch(`${base}/api/pro/score?n=${clip.n}&p=${idx}`, {
+    method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/octet-stream' }, body: pcm,
+  });
+  return { status: r.status, ms: Date.now() - t, body: await r.json().catch(() => null) };
+};
+ok(user && user.google && !user.pro.active, 'signed in, not Pro');
+
+// ---- 1. without Pro the endpoint refuses
+let r = await score();
+ok(r.status === 402, 'scoring endpoint refuses an account without Pro', `HTTP ${r.status} ${r.body && r.body.error}`);
+const anon = (await fetch(`${base}/api/pro/score?n=${clip.n}&p=${idx}`, { method: 'POST', body: pcm })).status;
+ok(anon === 401, 'and refuses a request with no account at all', `HTTP ${anon}`);
+
+// ---- 2. pay with a test card
+const openAccount = async () => {
+  await page.tap('#menu');
+  await page.waitForSelector('.sheet.in', { timeout: 5000 });
+  await page.tap('.tab[data-tab="acct"]');
+};
+await openAccount();
+await page.waitForSelector('#gopro', { timeout: 5000 });
+await page.evaluate(() => document.querySelector('#gopro').scrollIntoView({ block: 'center' }));
+await page.waitForTimeout(400);
+await page.screenshot({ path: path.join(shots, '1-card.png') });
+await page.tap('#gopro');
+await page.waitForURL(/checkout\.stripe\.com/, { timeout: 20000 });
+await page.waitForLoadState('domcontentloaded');
+const card = page.locator('#cardNumber');
+await page.waitForTimeout(3000);
+if (!(await card.isVisible().catch(() => false))) {
+  // several payment methods on offer: open the card one
+  const pick = page.locator('[data-testid="card-accordion-item-button"], #payment-method-accordion-item-title-card').first();
+  await pick.click({ timeout: 15000 }).catch(() => {});
+}
+await page.screenshot({ path: path.join(shots, '2-checkout.png') });
+await card.waitFor({ timeout: 20000 });
+if (await page.locator('#email').isEditable().catch(() => false)) await page.fill('#email', `${sub}@example.com`);
+await card.fill('4242 4242 4242 4242');
+await page.fill('#cardExpiry', '12 / 34');
+await page.fill('#cardCvc', '123');
+if (await page.locator('#billingName').isVisible().catch(() => false)) await page.fill('#billingName', 'Test Payer');
+if (await page.locator('#billingCountry').isVisible().catch(() => false)) await page.selectOption('#billingCountry', 'ES').catch(() => {});
+if (await page.locator('#billingPostalCode').isVisible().catch(() => false)) await page.fill('#billingPostalCode', '28001');
+await page.waitForTimeout(500);
+await page.screenshot({ path: path.join(shots, '3-filled.png') });
+await page.locator('[data-testid="hosted-payment-submit-button"], .SubmitButton').first().click();
+let back = true;
+await page.waitForURL((u) => String(u).startsWith(base), { timeout: 60000 }).catch(() => {
+  back = false;
+});
+if (!back) await page.screenshot({ path: path.join(shots, '3-stuck.png') });
+ok(back, 'test card accepted by Stripe Checkout, back in the app');
+
+// ---- 3. the account is Pro and the server scores
+await page.waitForSelector('.app.ready', { timeout: 20000 });
+let u = null;
+for (let i = 0; i < 20 && !(u && u.pro.active); i++) {
+  await sleep(1000);
+  u = await me();
+}
+ok(u.pro.active, 'the account is Pro', `status ${u.pro.status}, paid until ${new Date(u.pro.until || 0).toISOString().slice(0, 10)}`);
+await page.waitForTimeout(2500);
+ok(await page.evaluate(() => JSON.parse(localStorage.getItem('dailyclips.v2')).tier === 'pro'), 'the app switched itself to the Pro level');
+await page.screenshot({ path: path.join(shots, '4-back.png') });
+r = await score();
+ok(r.status === 200 && r.body.rows.length === unit.ph.flat().length, 'scoring endpoint accepts the Pro account',
+  `HTTP ${r.status}, ${r.body && r.body.rows && r.body.rows.length} phonemes, model ${r.body && r.body.ms} ms, whole request ${r.ms} ms`);
+// a real take through the app: fake microphone -> recorded -> sent to the server -> coloured words
+const box = await page.evaluate(() => {
+  const b = document.querySelector('.yt iframe').getBoundingClientRect();
+  return { x: b.x + b.width / 2, y: Math.min(b.y + b.height / 2, innerHeight * 0.46) };
+});
+await page.touchscreen.tap(box.x, box.y);
+await page.waitForSelector('.deck.prompt', { timeout: 40000 });
+speak(jobs[1].out);
+const tapAt = Date.now();
+await page.tap('#mic');
+await page.waitForSelector('.deck.feedback', { timeout: 40000 });
+const took = Date.now() - tapAt;
+const shown = await page.evaluate(() => document.querySelector('.fbscore').firstChild.textContent);
+ok(proCalls.includes(200), 'a take in the app is scored by the server',
+  `score ${shown}; ${(took / 1000).toFixed(1)} s from tapping the mic to the coloured words, the line itself lasts ${(pcm.length / 32000).toFixed(1)} s`);
+await page.waitForTimeout(700);
+await page.screenshot({ path: path.join(shots, '5-pro-feedback.png') });
+
+// ---- 4. cancel from the app: Pro stays until the end of the paid period
+await page.goto(base + '/', { waitUntil: 'domcontentloaded' });
+await page.waitForSelector('.app.ready', { timeout: 20000 });
+await openAccount();
+await page.waitForSelector('#cancelpro', { timeout: 8000 });
+await page.evaluate(() => document.querySelector('#cancelpro').scrollIntoView({ block: 'center' }));
+await page.waitForTimeout(300);
+await page.screenshot({ path: path.join(shots, '6-pro-card.png') });
+await page.tap('#cancelpro');
+await page.waitForSelector('#resumepro', { timeout: 15000 });
+await page.screenshot({ path: path.join(shots, '7-cancelled.png') });
+u = await me();
+ok(u.pro.cancel && u.pro.active, 'cancelled from the app: no renewal, Pro kept until the period ends', `until ${new Date(u.pro.until || 0).toISOString().slice(0, 10)}`);
+r = await score();
+ok(r.status === 200, 'still accepted during the paid period', `HTTP ${r.status}`);
+
+// ---- 5. the period ends
+const customers = await stripe('GET', '/customers?limit=3&email=' + encodeURIComponent(u.email));
+const subs = customers.data && customers.data[0] ? await stripe('GET', '/subscriptions?status=all&customer=' + customers.data[0].id) : { data: [] };
+ok(subs.data.length === 1 && (subs.data[0].cancel_at_period_end || subs.data[0].cancel_at), 'Stripe has the subscription set to end with the period', subs.data[0] && subs.data[0].id);
+if (subs.data[0]) await stripe('DELETE', '/subscriptions/' + subs.data[0].id);
+for (let i = 0; i < 25 && u.pro.active; i++) {
+  await sleep(1000);
+  u = await me();
+}
+ok(!u.pro.active, 'subscription ended at Stripe: the webhook switched Pro off', `status ${u.pro.status}`);
+r = await score();
+ok(r.status === 402, 'scoring endpoint refuses the account again', `HTTP ${r.status}`);
+ok(!errors.length, 'no page errors', errors.join(' | '));
+await context.close();
+console.log(`\n${failed ? failed + ' FAILED' : 'ALL PASSED'} in ${Math.round((Date.now() - t0) / 1000)} s · screenshots in ${shots}`);
+process.exit(failed ? 1 : 0);
