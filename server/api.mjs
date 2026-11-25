@@ -539,12 +539,12 @@ const server = http.createServer(async (req, res) => {
     res.end();
   } catch (e) {
     const status = e.status || 500;
-    if (status >= 500) log('ERROR', req.method, p, e.stack || e);
+    if (status >= 500 && e.code !== 'busy') log('ERROR', req.method, p, e.stack || e); // "busy" is the Pro queue saying no, as designed
     if (!res.headersSent) send(res, status, { error: e.code || 'server_error' });
     else res.end();
   } finally {
     const ms = Date.now() - started;
-    if (ms > 500) log('slow', req.method, p, ms + 'ms');
+    if (ms > 500 && !p.startsWith("/api/pro/")) log("slow", req.method, p, ms + "ms");
   }
 });
 
