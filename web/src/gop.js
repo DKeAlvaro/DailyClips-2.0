@@ -87,3 +87,27 @@ export function gopRows(logp, T, V, seq, path) {
     return { gop: sum / n, heard: bestId[top] };
   });
 }
+
+/**
+ * Share of the phones the model heard that the alignment could not place on any expected phone.
+ * Forced alignment only asks "is each expected phone there?", so a longer, different sentence can
+ * still land a few lucky phones; whatever was said on top of the line shows up here.
+ */
+export function extraSpeech(logp, T, V, path) {
+  let heard = 0, extra = 0, prev = -1;
+  for (let t = 0; t < T; t++) {
+    const o = t * V;
+    let top = -Infinity, topId = 0, m = -Infinity, id = 4;
+    for (let v = 0; v < V; v++) {
+      const x = logp[o + v];
+      if (x > top) { top = x; topId = v; }
+      if (v > 3 && x > m) { m = x; id = v; }
+    }
+    if (topId === BLANK) { prev = -1; continue; }
+    if (id === prev) continue;
+    prev = id;
+    heard++;
+    if (path[t] < 0) extra++;
+  }
+  return heard ? extra / heard : 0;
+}

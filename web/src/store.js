@@ -11,6 +11,7 @@ const fresh = () => ({
   token: randomToken(),
   lang: null, // null = follow the browser
   tier: 'web', // web | dev | pro
+  devModel: false, // the on-device model has been downloaded into this browser
   sound: true,
   user: null, // server profile of a signed-in user
   results: {}, // clip n -> { id?, n, score, phrases, tier, day, at, onDay, synced, sounds? }

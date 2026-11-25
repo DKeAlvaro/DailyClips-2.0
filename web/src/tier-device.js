@@ -1,7 +1,7 @@
 // On-device level: a phoneme model that is downloaded once (never on its own) and runs in the browser
 // with ONNX Runtime Web. The audio never leaves the phone.
 import { record } from './rec.js';
-import { logSoftmax, viterbi, gopRows } from './gop.js';
+import { logSoftmax, viterbi, gopRows, extraSpeech } from './gop.js';
 import { scorePhrase } from './phon.js';
 import VOCAB from './vocab.json';
 
@@ -49,37 +49,48 @@ export async function removeModel() {
 }
 
 // The model runs in a worker so the page keeps animating while it thinks. The worker is built from
-// this function's source: it must not use anything defined outside of itself.
-function workerMain() {
+// the source of these two functions: they must not use anything defined outside of themselves.
+function engine() {
   let ort, session;
+  return async (m) => {
+    if (m.type === 'init') {
+      ort = await import(m.ort + 'ort.wasm.min.mjs');
+      ort.env.wasm.wasmPaths = m.ort;
+      ort.env.wasm.numThreads = 1; // threads need cross-origin isolation, which rules out the YouTube embed
+      session = await ort.InferenceSession.create(m.model, { executionProviders: ['wasm'], graphOptimizationLevel: 'all' });
+      return { ok: true };
+    }
+    const n = m.pcm.length;
+    const feeds = { input_values: new ort.Tensor('float32', m.pcm, [1, n]) };
+    if (session.inputNames.includes('attention_mask')) feeds.attention_mask = new ort.Tensor('int64', new BigInt64Array(n).fill(1n), [1, n]);
+    const out = await session.run(feeds);
+    const logits = out[session.outputNames[0]];
+    return { ok: true, data: new Float32Array(logits.data), dims: logits.dims };
+  };
+}
+
+function workerMain(makeEngine) {
+  const run = makeEngine();
   self.onmessage = async (e) => {
-    const m = e.data;
     try {
-      if (m.type === 'init') {
-        ort = await import(m.ort + 'ort.wasm.min.mjs');
-        ort.env.wasm.wasmPaths = m.ort;
-        ort.env.wasm.numThreads = 1; // threads need cross-origin isolation, which rules out the YouTube embed
-        session = await ort.InferenceSession.create(m.model, { executionProviders: ['wasm'], graphOptimizationLevel: 'all' });
-        self.postMessage({ id: m.id, ok: true });
-      } else {
-        const n = m.pcm.length;
-        const feeds = { input_values: new ort.Tensor('float32', m.pcm, [1, n]) };
-        if (session.inputNames.includes('attention_mask')) feeds.attention_mask = new ort.Tensor('int64', new BigInt64Array(n).fill(1n), [1, n]);
-        const out = await session.run(feeds);
-        const logits = out[session.outputNames[0]];
-        const data = new Float32Array(logits.data);
-        self.postMessage({ id: m.id, ok: true, data, dims: logits.dims }, [data.buffer]);
-      }
+      const out = await run(e.data);
+      self.postMessage({ id: e.data.id, ...out }, out.data ? [out.data.buffer] : []);
     } catch (err) {
-      self.postMessage({ id: m.id, ok: false, error: String((err && err.message) || err) });
+      self.postMessage({ id: e.data.id, ok: false, error: String((err && err.message) || err) });
     }
   };
 }
 
-let worker = null, ready = null, seq = 0;
+let worker = null, ready = null, seq = 0, inline = null;
 const waiting = new Map();
 
+/** Measurement only: run the model on the page's own thread (so CPU throttling applies to it). */
+export function useMainThread() {
+  inline = engine();
+}
+
 function call(msg, transfer = []) {
+  if (inline) return inline(msg);
   return new Promise((resolve, reject) => {
     const id = ++seq;
     waiting.set(id, { resolve, reject });
@@ -94,20 +105,22 @@ export function loadModel() {
       const hit = await (await caches.open(CACHE)).match(MODEL_URL);
       if (!hit) throw new Error('no_model');
       const model = await hit.arrayBuffer();
-      const src = URL.createObjectURL(new Blob(['(' + workerMain.toString() + ')()'], { type: 'text/javascript' }));
-      worker = new Worker(src, { type: 'module' });
-      worker.onmessage = (e) => {
-        const w = waiting.get(e.data.id);
-        if (!w) return;
-        waiting.delete(e.data.id);
-        if (e.data.ok) w.resolve(e.data);
-        else w.reject(new Error(e.data.error));
-      };
-      worker.onerror = (e) => {
-        for (const w of waiting.values()) w.reject(new Error(e.message || 'worker'));
-        waiting.clear();
-      };
-      await call({ type: 'init', ort: ORT_URL, model }, [model]);
+      if (!inline) {
+        const src = URL.createObjectURL(new Blob([`(${workerMain.toString()})(${engine.toString()})`], { type: 'text/javascript' }));
+        worker = new Worker(src, { type: 'module' });
+        worker.onmessage = (e) => {
+          const w = waiting.get(e.data.id);
+          if (!w) return;
+          waiting.delete(e.data.id);
+          if (e.data.ok) w.resolve(e.data);
+          else w.reject(new Error(e.data.error));
+        };
+        worker.onerror = (e) => {
+          for (const w of waiting.values()) w.reject(new Error(e.message || 'worker'));
+          waiting.clear();
+        };
+      }
+      await call({ type: 'init', ort: ORT_URL, model }, inline ? [] : [model]);
     })().catch((e) => {
       ready = null;
       throw e;
@@ -137,8 +150,10 @@ export async function scoreAudio(unit, pcm) {
   const t0 = performance.now();
   const { logp, T, V } = await posteriors(pcm);
   const ids = unit.ph.flat().map((p) => VOCAB[p]);
-  const rows = gopRows(logp, T, V, ids, viterbi(logp, T, V, ids)).map((r) => ({ gop: r.gop, heard: r.heard == null ? null : ID2PH[r.heard] }));
-  return { ...scorePhrase(unit, rows, 'dev'), rows, ms: Math.round(performance.now() - t0) };
+  const path = viterbi(logp, T, V, ids);
+  const rows = gopRows(logp, T, V, ids, path).map((r) => ({ gop: r.gop, heard: r.heard == null ? null : ID2PH[r.heard] }));
+  const extra = extraSpeech(logp, T, V, path);
+  return { ...scorePhrase(unit, rows, 'dev', extra), rows, extra, ms: Math.round(performance.now() - t0) };
 }
 
 export function listenDevice(unit, { maxMs, onLevel, onScoring } = {}) {

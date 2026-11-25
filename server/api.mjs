@@ -368,7 +368,7 @@ const int = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
 
 // ---------------------------------------------------------------- services that need the pieces above
 
-const billing = createBilling({ cfg, env, q, tx, log, bad, isPro, onChange: () => statsCache.clear() });
+const billing = createBilling({ cfg, env, q, log, bad, isPro, allow, onChange: () => statsCache.clear() });
 const pro = createPro({ env, q, log, bad, isPro, clips, allow });
 
 // ---------------------------------------------------------------- routes

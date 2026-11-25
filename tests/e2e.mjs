@@ -54,11 +54,14 @@ const box = await a.page.evaluate(() => {
 await a.page.waitForTimeout(400);
 await a.page.screenshot({ path: path.join(shots, '1-start.png') });
 await a.page.touchscreen.tap(box.x, box.y);
+await a.page.waitForSelector('.app.play', { timeout: 20000 });
+const playingAt = Date.now() - nav0;
+ok(playingAt < 10000, 'practising in under 10 s', `today's clip playing ${(playingAt / 1000).toFixed(1)} s after opening the URL`);
 const scores = [];
 for (let i = 0; i < units.length; i++) {
   await a.page.waitForSelector('.deck.prompt', { timeout: 25000 });
   if (i === 0) {
-    ok(Date.now() - nav0 < 10000, 'practising in under 10 s', `${((Date.now() - nav0) / 1000).toFixed(1)} s from navigation to the first "your turn"`);
+    console.log(`${stamp()} INFO  first "your turn" ${((Date.now() - nav0) / 1000).toFixed(1)} s after opening the URL (the first line lasts ${(units[0].t1 - (clip.start ?? units[0].t0)).toFixed(1)} s)`);
     await a.page.screenshot({ path: path.join(shots, '2-prompt.png') });
   }
   speak(jobs[i].out);
@@ -78,7 +81,7 @@ for (let i = 0; i < units.length; i++) {
 await a.page.waitForSelector('#result', { timeout: 10000 });
 await a.page.waitForTimeout(2200);
 await a.page.screenshot({ path: path.join(shots, '5-result.png') });
-const shown = Number(await a.page.evaluate(() => document.querySelector('.big span').textContent));
+const shown = Number(await a.page.evaluate(() => document.querySelector('.big').textContent));
 const mean = Math.round(scores.reduce((x, y) => x + y, 0) / scores.length);
 ok(shown === mean, 'final score is the mean of the lines', `${scores.join(', ')} -> ${shown}`);
 ok(shown >= 80, 'native TTS scores high on the web level', String(shown));
@@ -101,20 +104,28 @@ if (secret) {
   });
   ok(me2.results.length === 1 && me2.results[0].score === shown && me2.streak.current === 1, 'signing in keeps the anonymous result and streak', `score ${me2.results[0] && me2.results[0].score}, streak ${me2.streak.current}`);
   await a.page.tap('#streakchip');
-  await a.page.waitForSelector('.sheet.in .kpis', { timeout: 5000 });
+  await a.page.waitForSelector('.sheet.in .facts', { timeout: 5000 });
   await a.page.waitForTimeout(500);
-  const kpis = await a.page.evaluate(() => [...document.querySelectorAll('.kpi b')].map((b) => b.textContent));
-  ok(kpis[0] === '1' && kpis[2] === '1' && kpis[3] === String(shown), 'stats sheet: streak, clips done and average', kpis.join(' / '));
+  const facts = await a.page.evaluate(() => ({
+    streak: document.querySelector('.say').dataset.v,
+    ...Object.fromEntries([...document.querySelectorAll('.facts [data-k]')].map((d) => [d.dataset.k, d.querySelector('b').textContent])),
+  }));
+  ok(facts.streak === '1' && facts.clips === '1' && facts.avg === String(shown), 'stats tab: streak, clips done and average', JSON.stringify(facts));
   await a.page.screenshot({ path: path.join(shots, '6-stats.png') });
-  await a.page.tap('.sheet .sh .icon');
-  await a.page.waitForTimeout(500);
-  await a.page.tap('button[aria-label="Ranking"]');
+  await a.page.tap('.tab[data-tab="rank"]');
   await a.page.waitForSelector('.sheet.in .rk', { timeout: 5000 });
   await a.page.waitForTimeout(500);
   const meRow = await a.page.evaluate(() => (document.querySelector('.rk.me') || {}).innerText || '');
-  ok(/Probador/.test(meRow) && meRow.includes(String(shown)), 'ranking shows the signed-in user with their score', meRow.replace(/\s+/g, ' '));
+  ok(/Probador/.test(meRow) && meRow.includes(String(shown)), 'ranking tab shows the signed-in user with their score', meRow.replace(/\s+/g, ' '));
   await a.page.screenshot({ path: path.join(shots, '7-ranking.png') });
-  await a.page.tap('.sheet .sh .icon');
+  await a.page.tap('.tab[data-tab="clips"]');
+  await a.page.waitForSelector('.sheet.in .arc', { timeout: 5000 });
+  await a.page.waitForTimeout(400);
+  await a.page.screenshot({ path: path.join(shots, '7b-clips.png') });
+  await a.page.tap('.tab[data-tab="acct"]');
+  await a.page.waitForTimeout(600);
+  await a.page.screenshot({ path: path.join(shots, '7c-account.png') });
+  await a.page.tap('#closesheet');
   await a.page.waitForTimeout(500);
 } else console.log(`${stamp()} SKIP  test session (no --secret)`);
 

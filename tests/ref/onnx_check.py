@@ -17,7 +17,7 @@ import onnxruntime as ort
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scorer"))
-from gop import gop_rows, log_softmax, normalize, viterbi  # noqa: E402
+from gop import extra_speech, gop_rows, log_softmax, normalize, viterbi  # noqa: E402
 
 model_path, vocab_path, name = sys.argv[1], sys.argv[2], sys.argv[3]
 ref = Path(sys.argv[sys.argv.index("--dir") + 1]) if "--dir" in sys.argv else ROOT / "work" / "ref"
@@ -56,12 +56,14 @@ for item in index:
     seq = [vocab[p] for w in words for p in w]
     t = time.time()
     logp = run(wav)
-    rows = gop_rows(logp, seq, viterbi(logp, seq))
+    path = viterbi(logp, seq)
+    rows = gop_rows(logp, seq, path)
+    extra = extra_speech(logp, path)
     secs += time.time() - t
     audio += len(wav) / 16000
     g = [r["gop"] for r in rows if r["gop"] is not None]
     out.append({**item, "gop": [r["gop"] for r in rows], "heard": [id2ph.get(r["heard"]) for r in rows],
-                "mean": round(float(np.mean(g)), 3), "exact": round(float(np.mean([x > -0.01 for x in g])), 3)})
+                "extra": round(extra, 3), "mean": round(float(np.mean(g)), 3), "exact": round(float(np.mean([x > -0.01 for x in g])), 3)})
 json.dump(out, open(ref / f"{name}.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 
 print("%.1fs of audio scored in %.1fs (x%.2f realtime, 1 thread)" % (audio, secs, secs / audio))

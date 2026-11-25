@@ -58,7 +58,7 @@ PRIVACY_ES = f"""
 <main id="es">
 <h1>Privacidad</h1>
 <p class="date">Última actualización: {UPDATED_ES}</p>
-<p>DailyClips lo lleva una persona, Álvaro Menéndez Ros (Eindhoven, Países Bajos). Para cualquier cosa sobre tus datos: {MAIL}.</p>
+<p>El responsable de tus datos es DailyClips (llmers.es). Para cualquier cosa sobre ellos: {MAIL}.</p>
 
 <h2>Qué se guarda</h2>
 <ul>
@@ -96,7 +96,7 @@ PRIVACY_EN = f"""
 <main id="en" hidden>
 <h1>Privacy</h1>
 <p class="date">Last updated: {UPDATED_EN}</p>
-<p>DailyClips is run by one person, Álvaro Menéndez Ros (Eindhoven, the Netherlands). For anything about your data: {MAIL}.</p>
+<p>DailyClips (llmers.es) is responsible for your data. For anything about it: {MAIL}.</p>
 
 <h2>What is stored</h2>
 <ul>
@@ -134,7 +134,7 @@ TERMS_ES = f"""
 <main id="es">
 <h1>Términos</h1>
 <p class="date">Última actualización: {UPDATED_ES}</p>
-<p>DailyClips es una web para practicar la pronunciación en inglés repitiendo frases de clips cortos. La lleva Álvaro Menéndez Ros (Eindhoven, Países Bajos). Contacto: {MAIL}.</p>
+<p>DailyClips es una web para practicar la pronunciación en inglés repitiendo frases de clips cortos. Contacto: {MAIL}.</p>
 
 <h2>El servicio</h2>
 <ul>
@@ -157,8 +157,8 @@ TERMS_ES = f"""
 <h2>Uso correcto</h2>
 <p>No automatices el envío de resultados, no intentes tumbar el servicio y no suplantes a nadie. Los resultados claramente falsos se pueden borrar del ranking.</p>
 
-<h2>Responsabilidad y ley</h2>
-<p>En la medida en que la ley lo permite, DailyClips no responde de daños indirectos derivados del uso del servicio. Estos términos se rigen por la ley de los Países Bajos, sin quitarte la protección que te dé la ley de consumo de tu país.</p>
+<h2>Responsabilidad</h2>
+<p>En la medida en que la ley lo permite, DailyClips no responde de daños indirectos derivados del uso del servicio. Nada de esto te quita la protección que te dé la ley de consumo de tu país.</p>
 </main>
 """
 
@@ -166,7 +166,7 @@ TERMS_EN = f"""
 <main id="en" hidden>
 <h1>Terms</h1>
 <p class="date">Last updated: {UPDATED_EN}</p>
-<p>DailyClips is a website to practise English pronunciation by repeating lines from short clips. It is run by Álvaro Menéndez Ros (Eindhoven, the Netherlands). Contact: {MAIL}.</p>
+<p>DailyClips is a website to practise English pronunciation by repeating lines from short clips. Contact: {MAIL}.</p>
 
 <h2>The service</h2>
 <ul>
@@ -189,8 +189,8 @@ TERMS_EN = f"""
 <h2>Fair use</h2>
 <p>Do not automate result submissions, do not try to take the service down and do not impersonate anyone. Clearly fake results may be removed from the ranking.</p>
 
-<h2>Liability and law</h2>
-<p>To the extent the law allows, DailyClips is not liable for indirect damages arising from the use of the service. These terms are governed by the law of the Netherlands, without taking away any protection your own country's consumer law gives you.</p>
+<h2>Liability</h2>
+<p>To the extent the law allows, DailyClips is not liable for indirect damages arising from the use of the service. None of this takes away any protection your own country's consumer law gives you.</p>
 </main>
 """
 

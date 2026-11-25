@@ -84,3 +84,29 @@ def gop_rows(logp, seq, path):
         top = sel[int(np.argmax(best[sel]))]
         rows.append({"gop": round(g, 3), "heard": int(best_id[top])})
     return rows
+
+
+def extra_speech(logp, path):
+    """Share of the phones the model heard that the alignment could not place on any expected phone.
+
+    Forced alignment only asks "is each expected phone there?", so someone saying a longer, different
+    sentence can still land a few lucky phones. Everything they said on top shows up here.
+    """
+    top = logp.argmax(1)
+    phones = logp.copy()
+    phones[:, list(SPECIAL)] = NEG
+    best_id = phones.argmax(1)
+    heard = extra = 0
+    prev = None
+    for t, q in enumerate(path):
+        if top[t] == BLANK:
+            prev = None
+            continue
+        pid = int(best_id[t])
+        if pid == prev:
+            continue
+        prev = pid
+        heard += 1
+        if q < 0:
+            extra += 1
+    return extra / heard if heard else 0.0

@@ -8,7 +8,7 @@ import { band } from './words.js';
 export const CAL = {
   // k: how fast a phone's score falls as its goodness of pronunciation drops
   // pts: [raw score of the model, common-scale score] for another sentence, Spanish accent, native
-  dev: { k: 10, pts: [[0.36, 8], [0.63, 77], [0.82, 100]] },
+  dev: { k: 10, pts: [[0.25, 8], [0.58, 77], [0.78, 100]] },
   pro: { k: 10, pts: [[0.36, 8], [0.63, 77], [0.82, 100]] },
 };
 
@@ -28,9 +28,10 @@ const phoneScore = (gop, k) => (gop == null ? 0 : Math.max(0, Math.min(1, 1 + go
 /**
  * unit: the clip's phrase ({ text, ph: [[phones of word 1], ...], m: { dev: "1101..", pro: ".." } })
  * rows: per canonical phone, in order: { gop, heard } (heard = phone symbol the model liked best)
+ * extra: share of what was heard that is not part of the phrase (0 when the take is just the phrase)
  * Phones the native reference itself does not hit (mask "0") are shown but not counted.
  */
-export function scorePhrase(unit, rows, tier) {
+export function scorePhrase(unit, rows, tier, extra = 0) {
   const cal = CAL[tier];
   const mask = (unit.m && unit.m[tier]) || '';
   const texts = unit.text.split(/\s+/).filter(Boolean);
@@ -50,5 +51,5 @@ export function scorePhrase(unit, rows, tier) {
     const s = n ? toScale(sum / n, cal.pts) : null;
     return { t: texts[wi] || '', s, c: s == null ? 'g' : band(s), ph };
   });
-  return { score: counted ? toScale(total / counted, cal.pts) : 0, words };
+  return { score: counted ? toScale((total / counted) * (1 - extra), cal.pts) : 0, words };
 }

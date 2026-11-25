@@ -170,6 +170,13 @@ def main():
             "ar": ar, "poster": poster(vid, ar < 1), "start": round(max(0.0, lines[0]["t0"] - 0.35), 2), "phrases": lines,
         }
         QUEUE.mkdir(parents=True, exist_ok=True)
+        target = QUEUE / f"{pick['slug']}.json"
+        if target.exists():  # keep the native reference masks (refs.py) of lines that did not change
+            old = {p["text"]: p for p in json.loads(target.read_text(encoding="utf-8"))["phrases"]}
+            for p in lines:
+                prev = old.get(p["text"])
+                if prev and "m" in prev and prev.get("ph") == p.get("ph"):
+                    p["m"] = prev["m"]
         (QUEUE / f"{pick['slug']}.json").write_text(json.dumps(clip, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
         order.append(pick["slug"])
         n = sum(1 for p in lines if not p.get("skip"))

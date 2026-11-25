@@ -30,13 +30,24 @@ const res = await build({
 });
 const entry = Object.entries(res.metafile.outputs).find(([, o]) => o.entryPoint)[0];
 const jsName = path.basename(entry);
+// shared chunks the entry imports right away: preload them so they do not wait for the entry to be parsed
+const eager = new Set();
+const walk = (file) => {
+  for (const imp of res.metafile.outputs[file].imports || []) {
+    if (imp.kind !== 'import-statement' || eager.has(imp.path)) continue;
+    eager.add(imp.path);
+    walk(imp.path);
+  }
+};
+walk(entry);
+const preload = [...eager].map((f) => `<link rel="modulepreload" href="/assets/${path.basename(f)}">`).join('');
 
 const css = (await transform(fs.readFileSync(path.join(src, 'styles.css'), 'utf8'), { loader: 'css', minify: true })).code
   .replaceAll('__FONT__', fontName);
 
 for (const page of ['index.html']) {
   const html = fs.readFileSync(path.join(src, page), 'utf8')
-    .replaceAll('__CSS__', () => css).replaceAll('__JS__', jsName).replaceAll('__FONT__', fontName);
+    .replaceAll('__CSS__', () => css).replaceAll('__JS__', jsName).replaceAll('__FONT__', fontName).replaceAll('__PRELOAD__', preload);
   fs.writeFileSync(path.join(tmp, page), html);
 }
 
