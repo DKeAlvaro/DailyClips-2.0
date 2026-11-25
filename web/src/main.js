@@ -442,7 +442,7 @@ function renderCard(msg) {
   const phrase = h('p.phrase' + (line.text.length > 64 ? '.long' : '') + (line.skip ? '.ctx' : ''));
   words.forEach((w, j) => {
     const r = res && res.words[j];
-    phrase.append(h('span.w' + (r ? '.' + (r.s == null ? 'n' : r.c) : ''), { style: { '--i': j }, onclick: r ? () => showTip(tip, r) : null }, w), j < words.length - 1 ? ' ' : '');
+    phrase.append(h('span.w' + (r ? '.' + (r.s == null ? 'n' : r.c) : ''), { style: { '--i': j }, onclick: r ? (e) => showTip(tip, r, e.currentTarget) : null }, w), j < words.length - 1 ? ' ' : '');
   });
   // takes left: filled dots, like lives (free practice has no limit, so no dots)
   const left = Math.max(0, MAX_TAKES - s.takes[i]);
@@ -470,7 +470,7 @@ function renderCard(msg) {
         h('button.btn', { disabled: !s.practice && left <= 0, onclick: () => playUnit(i, { replay: true }) }, icon('replay'), t('retry'), dots()),
         h('button.btn.' + (res.score >= 50 || left <= 0 ? 'pri' : 'wht'), { onclick: next, id: 'next' }, t(last ? 'finish' : 'next'), icon('next'))));
     const worst = res.words.filter((w) => w.c !== 'g' && w.s != null).sort((a, b) => a.s - b.s)[0];
-    if (worst) showTip(tip, worst);
+    if (worst) showTip(tip, worst, phrase.querySelectorAll('.w')[res.words.indexOf(worst)]);
     else tip.innerHTML = t('all_good');
     if (!S.seen.mic) {
       S.seen.mic = true;
@@ -480,7 +480,13 @@ function renderCard(msg) {
   clear(deck, h('div.card', kids));
 }
 
-function showTip(tip, w) {
+/** The tip under the phrase for word `w`; its span `el` gets the plate that ties the two together. */
+function showTip(tip, w, el) {
+  if (el) {
+    el.parentNode.querySelectorAll('.w.sel').forEach((x) => x.classList.remove('sel'));
+    el.classList.add('sel');
+  }
+  tip.dataset.c = w.c;
   const word = w.t.replace(/^[^\w']+|[^\w']+$/g, '');
   let html = w.c === 'g' ? t('tip_good', { w: word }) : w.c === 'c' && w.heard ? t('tip_close', { w: word, h: w.heard }) : w.heard ? t('tip_miss_h', { w: word, h: w.heard }) : t('tip_miss', { w: word });
   if (w.rare) html = t('tip_rare', { w: word });
