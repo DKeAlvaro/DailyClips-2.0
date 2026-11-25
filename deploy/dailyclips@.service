@@ -1,0 +1,30 @@
+# One unit, two instances: dailyclips@prod and dailyclips@staging.
+# Each instance has its own checkout (/opt/dailyclips/<instance>), env file and data folder.
+[Unit]
+Description=DailyClips API (%i)
+After=network.target
+
+[Service]
+User=dailyclips
+Group=dailyclips
+WorkingDirectory=/opt/dailyclips/%i
+EnvironmentFile=/opt/dailyclips/env/%i.env
+Environment=DC_DATA=/opt/dailyclips/data-%i NODE_ENV=production
+ExecStart=/usr/bin/node --disable-warning=ExperimentalWarning server/api.mjs
+Restart=always
+RestartSec=2
+
+# stay small and polite next to whatever else runs on the machine
+MemoryMax=300M
+CPUWeight=50
+Nice=5
+OOMScoreAdjust=300
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/dailyclips/data-%i
+
+[Install]
+WantedBy=multi-user.target
