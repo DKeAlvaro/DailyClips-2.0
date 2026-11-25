@@ -9,6 +9,7 @@ import { listen, canListen, activeTier, warm } from './tiers.js';
 import { ctx, MAX_TAKES, now, currentDay, isIOS } from './ctx.js';
 import { showResult, hideResult } from './result.js';
 import { openStats, openRank, openArchive, openAccount, openBlocked, closeSheet } from './sheets.js';
+import { proReturn } from './billing.js';
 
 const app = $('#app'), stage = $('#stage'), deck = $('#deck'), top = $('#top');
 const poster = $('#poster'), backdrop = $('#backdrop'), tapcatch = $('#tapcatch'), ytMount = $('#yt');
@@ -481,6 +482,7 @@ function renderCard(msg) {
 function showTip(tip, w) {
   const word = w.t.replace(/^[^\w']+|[^\w']+$/g, '');
   let html = w.c === 'g' ? t('tip_good', { w: word }) : w.c === 'c' && w.heard ? t('tip_close', { w: word, h: w.heard }) : w.heard ? t('tip_miss_h', { w: word, h: w.heard }) : t('tip_miss', { w: word });
+  if (w.rare) html = t('tip_rare', { w: word });
   if (w.ph) {
     html = `<b>${word}</b> · ${w.s}`;
     html += '<br><span class="ph">' + w.ph.map((p) => `<span class="${band(p.s == null ? 100 : p.s)}">${p.p}</span>`).join('') + '</span>';
@@ -496,4 +498,5 @@ loadClip(boot.clip, { count: boot.count, initial: true });
 refreshMe().then(() => {
   renderTop();
   if (!ctx.session) rerender();
+  proReturn(); // back from the payment page
 });

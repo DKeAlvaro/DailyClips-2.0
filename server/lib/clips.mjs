@@ -99,7 +99,14 @@ export function createClips({ q, tx }, queueDir, log = console.log) {
     if (cache.has(n)) return cache.get(n);
     const row = q('SELECT n, day, slug, json FROM clips WHERE n = ?').get(n);
     if (!row) return null;
-    const clip = { n: row.n, day: row.day, ...JSON.parse(row.json) };
+    // the queue file wins over the copy taken on publishing day: scoring data added to a clip later
+    // (native reference masks, rare words) reaches the clips that are already out
+    let body = JSON.parse(row.json);
+    try {
+      const file = loadSlug(row.slug);
+      if (file.yt === body.yt && file.phrases.length === body.phrases.length) body = file;
+    } catch { /* no longer in the queue folder */ }
+    const clip = { n: row.n, day: row.day, ...body };
     cache.set(n, clip);
     return clip;
   }

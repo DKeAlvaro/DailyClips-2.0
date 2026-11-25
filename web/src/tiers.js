@@ -4,6 +4,12 @@
 //   pro  phoneme-level, scored on our server with a larger model (subscription)
 import { S, save } from './store.js';
 import { listenWeb, webSupported } from './tier-web.js';
+import { extend } from './i18n.js';
+
+extend({
+  es: { tip_rare: '<b>{w}</b> · el reconocedor del navegador casi nunca entiende esta palabra: no cuenta para la nota' },
+  en: { tip_rare: "<b>{w}</b> · the browser's recogniser hardly ever gets this word: it doesn't count towards your score" },
+});
 
 let devModule = null;
 /** The on-device code is its own chunk: nobody downloads it until they pick that level. */
@@ -46,7 +52,7 @@ export function warm(unit) {
 export function listen(unit, hooks) {
   const tier = activeTier(unit);
   if (tier === 'web') {
-    const h = listenWeb(unit.text, hooks);
+    const h = listenWeb(unit.text, { ...hooks, rare: unit.rare });
     return { stop: h.stop, tier, promise: h.promise.then((r) => ({ ...r, tier })) };
   }
   let inner = null, stopped = false;

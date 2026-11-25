@@ -8,8 +8,9 @@ export const webSupported = () => !!SR();
  * Listens for one phrase. Returns { promise, stop }.
  * promise -> { ok: true, score, words, heard } or { ok: false, why }
  * why: nospeech | denied | unsupported | network | nomic | error
+ * `rare`: indices of the words of `text` that recognisers cannot be trusted with (see words.js).
  */
-export function listenWeb(text, { maxMs = 12000, onInterim, onStart, onSpeech } = {}) {
+export function listenWeb(text, { maxMs = 12000, onInterim, onStart, onSpeech, rare = null } = {}) {
   let rec, settled = false, best = null, stopTimer, hardTimer, idleTimer, fail = null;
   const promise = new Promise((resolve) => {
     const finish = (out) => {
@@ -49,7 +50,7 @@ export function listenWeb(text, { maxMs = 12000, onInterim, onStart, onSpeech } 
       for (let a = 1; a < lastRes.length; a++) cands.push(head + ' ' + lastRes[a].transcript);
       for (const c of cands) {
         if (!c.trim()) continue;
-        const r = compare(text, c);
+        const r = compare(text, c, { rare });
         if (!best || r.score > best.score) best = { ...r, heard: c.trim() };
       }
       if (best && onInterim) onInterim(best);
