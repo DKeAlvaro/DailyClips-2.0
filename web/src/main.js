@@ -169,7 +169,7 @@ function renderStart() {
   deck.className = 'deck';
   // what it is (kicker, title) and one line of where it is from; the play button says the rest
   clear(deck, h('div.start',
-    ctx.vs && h('div.vsline', { html: t('vs_line', { name: ctx.vs.name, score: ctx.vs.score }) }),
+    ctx.vs && h('div.vsline', { html: t(ctx.vs.score >= 100 ? 'vs_line_top' : 'vs_line', { name: ctx.vs.name, score: ctx.vs.score }) }),
     h('div', h('div.kicker', ctx.practiceArmed ? t('practice_mode') : isToday ? t('today_clip') : fmtDay(clip.day))),
     h('h1.title', clip.title),
     h('div.meta', [clip.src, t('lines', { n: ctx.units.length }), people].filter(Boolean).join(' · '))));

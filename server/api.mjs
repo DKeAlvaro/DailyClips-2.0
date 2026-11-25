@@ -230,16 +230,25 @@ function template() {
   return tpl.html;
 }
 
+// Link previews. A plain link invites you to try the clip; a link with ?vs=<result> is a dare from that
+// person, with their score in the title and a picture of that score: one pre-rendered image per score
+// (tools/make-og.mjs), so nothing is drawn at request time. The folder is versioned because /assets/ is
+// cached for a year: bump OG_V together with V in tools/make-og.mjs when the images are redrawn.
+const OG_V = 1;
 const OG = {
   es: {
-    title: (n, t) => `DailyClips #${n}: ${t}`,
-    desc: 'Repite las frases de un clip y mira qué tal pronuncias en inglés. Un clip nuevo cada día.',
-    vs: (name, score, n) => `${name} ha sacado ${score}/100 en DailyClips #${n}. ¿Le ganas?`,
+    title: (c) => `¿Cuánto sacas imitando un clip de ${c.src || c.title}?`,
+    desc: (c, k, sec) => `«${c.title}»: ${k} frases, ${sec} segundos. Repítelas en inglés y te da una nota de 0 a 100. Sin registro.`,
+    vsTitle: (name, score) => `${name} ha sacado ${score}/100. ${score === 100 ? '¿Lo igualas?' : '¿Le ganas?'}`,
+    vsDesc: (c, k, sec) => `Imita en inglés un clip de ${c.src || c.title}: ${k} frases, ${sec} segundos. Sin registro.`,
+    alt: (score) => (score == null ? 'DailyClips: ¿cuánto sacas?' : `${score} contra ti. ${score === 100 ? '¿Lo igualas?' : '¿Le ganas?'}`),
   },
   en: {
-    title: (n, t) => `DailyClips #${n}: ${t}`,
-    desc: 'Repeat the lines of a short clip and see how your English pronunciation scores. A new clip every day.',
-    vs: (name, score, n) => `${name} scored ${score}/100 on DailyClips #${n}. Can you beat that?`,
+    title: (c) => `How well can you imitate a clip from ${c.src || c.title}?`,
+    desc: (c, k, sec) => `"${c.title}": ${k} lines, ${sec} seconds. Say them in English and get a score from 0 to 100. No sign-up.`,
+    vsTitle: (name, score) => `${name} scored ${score}/100. ${score === 100 ? 'Can you match it?' : 'Can you beat that?'}`,
+    vsDesc: (c, k, sec) => `Imitate a clip from ${c.src || c.title} in English: ${k} lines, ${sec} seconds. No sign-up.`,
+    alt: (score) => (score == null ? 'DailyClips: what will you score?' : `${score} versus you. ${score === 100 ? 'Can you match it?' : 'Can you beat it?'}`),
   },
 };
 
@@ -257,21 +266,27 @@ function renderPage(n, url) {
   const lang = url.searchParams.get('l') === 'en' ? 'en' : 'es';
   const vs = publicResult(url.searchParams.get('vs'));
   const t = OG[lang];
-  const title = t.title(clip.n, clip.title);
-  const desc = vs && vs.n === clip.n ? t.vs(vs.name, vs.score, clip.n) : t.desc;
+  const dare = vs && vs.n === clip.n;
+  const lines = clip.phrases.filter((p) => !p.skip).length;
+  const secs = Math.max(1, Math.round(clip.phrases[clip.phrases.length - 1].t1 - clip.phrases[0].t0));
+  const score = dare ? Math.max(0, Math.min(100, Math.round(vs.score))) : null;
+  const ogTitle = dare ? t.vsTitle(vs.name, score) : t.title(clip);
+  const desc = dare ? t.vsDesc(clip, lines, secs) : t.desc(clip, lines, secs);
   const canon = `${cfg.baseUrl}/c/${clip.n}`;
   const og = [
-    `<title>${escapeHtml(n ? title : 'DailyClips')}</title>`,
+    `<title>${escapeHtml(n ? `${clip.title} · DailyClips` : 'DailyClips')}</title>`,
     `<meta name="description" content="${escapeHtml(desc)}">`,
     `<link rel="canonical" href="${n ? canon : cfg.baseUrl + '/'}">`,
     `<meta property="og:type" content="website">`,
     `<meta property="og:site_name" content="DailyClips">`,
-    `<meta property="og:title" content="${escapeHtml(vs && vs.n === clip.n ? desc : title)}">`,
-    `<meta property="og:description" content="${escapeHtml(vs && vs.n === clip.n ? t.desc : desc)}">`,
+    `<meta property="og:title" content="${escapeHtml(ogTitle)}">`,
+    `<meta property="og:description" content="${escapeHtml(desc)}">`,
     `<meta property="og:url" content="${canon}">`,
-    `<meta property="og:image" content="${cfg.baseUrl}/assets/og.png">`,
+    `<meta property="og:image" content="${cfg.baseUrl}/assets/og${OG_V}/${dare ? score : 'default'}.jpg">`,
+    `<meta property="og:image:type" content="image/jpeg">`,
     `<meta property="og:image:width" content="1200">`,
     `<meta property="og:image:height" content="630">`,
+    `<meta property="og:image:alt" content="${escapeHtml(t.alt(score))}">`,
     `<meta name="twitter:card" content="summary_large_image">`,
   ].join('\n  ');
   const stats = clipStats(clip.n);

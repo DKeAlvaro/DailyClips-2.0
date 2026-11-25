@@ -140,7 +140,8 @@ await a.page.evaluate(() => document.querySelector('#result').scrollTo(0, 0));
 await a.page.tap('#share');
 await a.page.waitForTimeout(300);
 const shared = await a.page.evaluate(() => window.__shared);
-ok(shared && shared.text.includes(`DailyClips #${clip.n}`) && /🟩|🟨|🟥/u.test(shared.text), 'share text is a Wordle-style grid', shared && shared.text.replace(/\n/g, ' ⏎ '));
+ok(shared && shared.text.split('\n').length === 3 && shared.text.includes(`${shown}/100`) && shared.text.includes(clip.src || clip.title) && /🟩|🟨|🟥/u.test(shared.text),
+  'share text: score and show, Wordle-style grid, a dare', shared && shared.text.replace(/\n/g, ' ⏎ '));
 ok(shared && new RegExp(`/c/${clip.n}\\?vs=[a-z0-9]+`).test(shared.url), 'share link points at the same clip with the result to beat', shared && shared.url);
 ok(errors.length === 0, 'no page errors for the first visitor', errors.join(' | '));
 await a.context.close();
@@ -148,7 +149,12 @@ await a.context.close();
 if (shared && shared.url) {
   const b = await launch({ headless });
   const html = await (await fetch(shared.url.replace(/^https?:\/\/[^/]+/, base))).text();
-  ok(/og:title" content="[^"]*\d+\/100/.test(html), 'link preview names the score to beat', (/og:title" content="([^"]*)"/.exec(html) || [])[1]);
+  ok(new RegExp(`og:title" content="[^"]*${shown}/100`).test(html), 'link preview names the score to beat', (/og:title" content="([^"]*)"/.exec(html) || [])[1]);
+  const img = (/og:image" content="([^"]*)"/.exec(html) || [])[1] || '';
+  const imgRes = await fetch(img.replace(/^https?:\/\/[^/]+/, base));
+  ok(img.endsWith(`/${shown}.jpg`) && imgRes.ok && imgRes.headers.get('content-type') === 'image/jpeg', 'link preview shows the picture of that score', img);
+  const plain = await (await fetch(`${base}/c/${clip.n}`)).text();
+  ok(/og:image" content="[^"]*\/default\.jpg"/.test(plain), 'a plain link gets the default picture', (/og:title" content="([^"]*)"/.exec(plain) || [])[1]);
   await b.page.goto(shared.url.replace(/^https?:\/\/[^/]+/, base), { waitUntil: 'domcontentloaded' });
   await b.page.waitForSelector('.vsline', { timeout: 10000 });
   const txt = await b.page.evaluate(() => document.querySelector('.start').innerText);

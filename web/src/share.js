@@ -5,12 +5,17 @@ import { toast } from './dom.js';
 
 const square = (v) => (v >= 80 ? '🟩' : v >= 50 ? '🟨' : '🟥');
 
+// Three short lines and the link last: what you did and your score, the grid (plus the streak), and a dare
+// that fits the score. Plain text: t() would escape the show's name for HTML.
 export function shareText(clip, rec) {
   const st = streak(currentDay());
-  const lines = [`DailyClips #${clip.n} · ${rec.score}/100`, rec.phrases.map(square).join('')];
-  if (st.current > 1) lines.push(`🔥 ${t('days', { n: st.current })}`);
-  lines.push(t('share_q'));
-  return lines.join('\n');
+  const b = rec.score >= 100 ? 'top' : rec.score >= 80 ? 'hi' : rec.score >= 50 ? 'mid' : 'lo';
+  const what = clip.src || clip.title;
+  return [
+    t('share_did_' + (b === 'lo' ? 'lo' : 'hi')).replace('{s}', rec.score).replace('{what}', what),
+    rec.phrases.map(square).join('') + (st.current > 1 ? ` 🔥${st.current}` : ''),
+    t('share_dare_' + b),
+  ].join('\n');
 }
 
 export function shareUrl(clip, rec) {
@@ -45,5 +50,5 @@ export function shareResult() {
 
 export function shareClip() {
   const clip = ctx.clip;
-  return send(`DailyClips #${clip.n}: ${clip.title}\n${t('share_try')}`, shareUrl(clip, null));
+  return send(t('share_try').replace('{what}', clip.src || clip.title), shareUrl(clip, null));
 }
