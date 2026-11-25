@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Pro, end to end, against a staging instance whose Stripe keys are TEST keys:
-//   without Pro the scoring endpoint refuses · pay with a test card in Stripe Checkout · the account
-//   becomes Pro and the server scores a take · cancel from the app (Pro stays until the period ends) ·
-//   the period ends (subscription deleted through the API) and the endpoint refuses again.
+//   without Pro the scoring endpoint refuses · pay once with a test card in Stripe Checkout · the account
+//   becomes Pro and the server scores a take · it cannot be bought twice · the payment is refunded
+//   (through the API) and the endpoint refuses again.
 //
 //   node tests/pro.mjs --base https://staging.example --secret <DC_TEST_AUTH> --stripe-key sk_test_... [--headed]
 import { spawnSync } from 'node:child_process';
@@ -130,7 +130,7 @@ for (let i = 0; i < 20 && !(u && u.pro.active); i++) {
   await sleep(1000);
   u = await me();
 }
-ok(u.pro.active, 'the account is Pro', `status ${u.pro.status}, paid until ${new Date(u.pro.until || 0).toISOString().slice(0, 10)}`);
+ok(u.pro.active, 'the account is Pro', `status ${u.pro.status}`);
 await page.waitForTimeout(2500);
 ok(await page.evaluate(() => JSON.parse(localStorage.getItem('dailyclips.v2')).tier === 'pro'), 'the app switched itself to the Pro level');
 await page.screenshot({ path: path.join(shots, '4-back.png') });
@@ -155,32 +155,28 @@ ok(proCalls.includes(200), 'a take in the app is scored by the server',
 await page.waitForTimeout(700);
 await page.screenshot({ path: path.join(shots, '5-pro-feedback.png') });
 
-// ---- 4. cancel from the app: Pro stays until the end of the paid period
+// ---- 4. it is a single payment: nothing to cancel, and it cannot be bought twice
 await page.goto(base + '/', { waitUntil: 'domcontentloaded' });
 await page.waitForSelector('.app.ready', { timeout: 20000 });
 await openAccount();
-await page.waitForSelector('#cancelpro', { timeout: 8000 });
-await page.evaluate(() => document.querySelector('#cancelpro').scrollIntoView({ block: 'center' }));
+await page.waitForSelector('.tier.on', { timeout: 8000 });
+await page.evaluate(() => document.querySelector('.tier.on').scrollIntoView({ block: 'center' }));
 await page.waitForTimeout(300);
 await page.screenshot({ path: path.join(shots, '6-pro-card.png') });
-await page.tap('#cancelpro');
-await page.waitForSelector('#resumepro', { timeout: 15000 });
-await page.screenshot({ path: path.join(shots, '7-cancelled.png') });
-u = await me();
-ok(u.pro.cancel && u.pro.active, 'cancelled from the app: no renewal, Pro kept until the period ends', `until ${new Date(u.pro.until || 0).toISOString().slice(0, 10)}`);
-r = await score();
-ok(r.status === 200, 'still accepted during the paid period', `HTTP ${r.status}`);
+ok(!(await page.$('#gopro')), 'the Pro card no longer offers to buy');
+const again = await fetch(base + '/api/billing/checkout', { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: '{}' });
+ok(again.status === 409, 'a second purchase is refused', `HTTP ${again.status}`);
 
-// ---- 5. the period ends
+// ---- 5. the payment is refunded: Pro goes with it
 const customers = await stripe('GET', '/customers?limit=3&email=' + encodeURIComponent(u.email));
-const subs = customers.data && customers.data[0] ? await stripe('GET', '/subscriptions?status=all&customer=' + customers.data[0].id) : { data: [] };
-ok(subs.data.length === 1 && (subs.data[0].cancel_at_period_end || subs.data[0].cancel_at), 'Stripe has the subscription set to end with the period', subs.data[0] && subs.data[0].id);
-if (subs.data[0]) await stripe('DELETE', '/subscriptions/' + subs.data[0].id);
+const pis = customers.data && customers.data[0] ? await stripe('GET', '/payment_intents?customer=' + customers.data[0].id) : { data: [] };
+ok(pis.data.length === 1 && pis.data[0].status === 'succeeded', 'Stripe has one payment for this customer, no subscription', pis.data[0] && `${pis.data[0].amount / 100} ${pis.data[0].currency}`);
+if (pis.data[0]) await fetch('https://api.stripe.com/v1/refunds', { method: 'POST', headers: { Authorization: 'Bearer ' + stripeKey }, body: new URLSearchParams({ payment_intent: pis.data[0].id }) });
 for (let i = 0; i < 25 && u.pro.active; i++) {
   await sleep(1000);
   u = await me();
 }
-ok(!u.pro.active, 'subscription ended at Stripe: the webhook switched Pro off', `status ${u.pro.status}`);
+ok(!u.pro.active, 'refunded at Stripe: the webhook switched Pro off', `status ${u.pro.status}`);
 r = await score();
 ok(r.status === 402, 'scoring endpoint refuses the account again', `HTTP ${r.status}`);
 ok(!errors.length, 'no page errors', errors.join(' | '));

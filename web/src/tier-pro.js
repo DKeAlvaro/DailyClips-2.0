@@ -1,5 +1,5 @@
 // Pro level: the take is sent to our server, scored there with a larger phoneme model and discarded.
-// Nothing to download and no work for the phone. Needs an active subscription.
+// Nothing to download and no work for the phone. Needs an account that bought Pro.
 import { record, toPcm16 } from './rec.js';
 import { scorePhrase } from './phon.js';
 import { api } from './api.js';
@@ -18,7 +18,7 @@ export function listenPro(unit, { maxMs, onLevel, onScoring } = {}) {
       });
       return { ok: true, ...scorePhrase(unit, out.rows, 'pro', out.extra || 0), ms: Math.round(performance.now() - t0), serverMs: out.ms, seconds: r.seconds };
     } catch (e) {
-      // 503 = queue full, 429 = personal limit, 402/403 = no subscription. The caller falls back with the audio.
+      // 503 = queue full, 429 = personal limit, 402/403 = no Pro. The caller falls back with the audio.
       const why = e.status === 503 ? 'busy' : e.status === 429 ? 'limit' : e.status === 402 || e.status === 403 ? 'nopro' : 'error';
       return { ok: false, why, pcm: r.pcm };
     }

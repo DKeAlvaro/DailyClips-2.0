@@ -12,7 +12,7 @@ Live at https://llmers.es
 | --- | --- | --- | --- |
 | Web (default) | words, with the browser's own recogniser | Web Speech API | nothing to download |
 | On this device | sounds (phonemes) | a 77 MB model downloaded once, ONNX Runtime Web | free, opt-in |
-| Pro | sounds, with a larger model | `scorer/` on the server | subscription |
+| Pro | sounds, with a larger model | `scorer/` on the server | one-time payment |
 
 Every level is pinned to the same 0-100 scale with the reference audios in `tests/ref` (native voice,
 Spanish-accented voice, a different sentence), so paying never buys a higher score.
@@ -21,7 +21,7 @@ Spanish-accented voice, a different sentence), so paying never buys a higher sco
 
 - `web/` front end: vanilla JS modules bundled by `build.mjs` (esbuild) into `dist/`. No framework.
 - `server/` API: Node (no dependencies) + SQLite (`node:sqlite`). Daily clip, results, streaks, stats,
-  rankings, Google sign-in, Stripe subscription (`lib/billing.mjs`), gateway to the scorer (`lib/pro.mjs`).
+  rankings, Google sign-in, Stripe one-time payment (`lib/billing.mjs`), gateway to the scorer (`lib/pro.mjs`).
 - `scorer/` Pro scoring service: Python (numpy + onnxruntime), one job at a time, short queue, audio never
   written to disk. A separate process with its own URL and key, so it can live on another machine.
 - `clips/` the queue of prepared clips (`queue/*.json`, order in `queue.json`). One is published per day.
@@ -53,7 +53,7 @@ the device has.
 ```
 node tests/e2e.mjs   --base <url> --secret <DC_TEST_AUTH>                      # whole flow, phone-sized Chrome
 node tests/smoke.mjs --base https://llmers.es                                  # read-only, safe on production
-node tests/pro.mjs   --base <staging> --secret <...> --stripe-key sk_test_...  # pay, score, cancel (Stripe test mode)
+node tests/pro.mjs   --base <staging> --secret <...> --stripe-key sk_test_...  # pay, score, refund (Stripe test mode)
 node tests/load.mjs  --base <staging> --results 300 --reads 300 --seconds 60   # never against production
 node tests/ref/device.mjs [--throttle 4]                                       # on-device level: sanity + timing
 python tests/ref/onnx_check.py MODEL.onnx scorer/vocab.json NAME               # a phoneme model on the reference audios

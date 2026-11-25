@@ -1,12 +1,11 @@
-// Stripe subscription for the Pro level, straight against Stripe's HTTP API (no SDK).
-// Stripe is the source of truth: every webhook and every action re-reads the subscription and copies
-// its status, period end and "cancels at period end" onto the user.
+// Pro is a single payment through Stripe Checkout, straight against Stripe's HTTP API (no SDK).
+// A paid checkout switches Pro on for the account for good; a full refund or a dispute switches it off.
+// On the user row: stripe_customer, stripe_sub = the payment intent that paid for Pro,
+// pro_status = active | refunded, pro_until = FOREVER while it is on.
 import crypto from 'node:crypto';
 
-const EVENTS = new Set([
-  'checkout.session.completed', 'customer.subscription.created', 'customer.subscription.updated',
-  'customer.subscription.deleted', 'invoice.paid', 'invoice.payment_failed',
-]);
+const FOREVER = Date.UTC(2099, 11, 31);
+const EVENTS = new Set(['checkout.session.completed', 'checkout.session.async_payment_succeeded', 'charge.refunded', 'charge.dispute.created']);
 
 /** { a: { b: 1 }, c: [{ d: 2 }] } -> a[b]=1&c[0][d]=2, the form encoding Stripe expects. */
 function form(obj, prefix = '', out = new URLSearchParams()) {
@@ -41,24 +40,29 @@ export function createBilling({ cfg, env, q, log, bad, isPro, allow, onChange })
 
   const userBy = (col, v) => (v ? q(`SELECT * FROM users WHERE ${col} = ?`).get(v) : null);
 
-  /** Copies the state of a Stripe subscription onto its user. Returns the fresh user row (or null). */
-  function apply(sub, user = null) {
-    user = user || userBy('stripe_sub', sub.id) || userBy('pub', sub.metadata && sub.metadata.user) || userBy('stripe_customer', sub.customer);
-    if (!user) return null;
-    const live = (s) => ['active', 'trialing', 'past_due'].includes(s);
-    // a late event about an old subscription must not switch off a newer one
-    if (user.stripe_sub && user.stripe_sub !== sub.id && live(user.pro_status) && !live(sub.status)) return user;
-    const item = sub.items && sub.items.data && sub.items.data[0];
-    const end = sub.current_period_end || (item && item.current_period_end) || 0;
-    const cancel = sub.cancel_at_period_end || sub.cancel_at ? 1 : 0;
-    q('UPDATE users SET stripe_customer = ?, stripe_sub = ?, pro_status = ?, pro_until = ?, pro_cancel = ? WHERE id = ?')
-      .run(String(sub.customer), sub.id, sub.status, end * 1000, cancel, user.id);
+  /** A paid Checkout session switches Pro on for the account it was opened from. */
+  function grant(session, user = null) {
+    if (session.mode !== 'payment' || session.payment_status !== 'paid') return null;
+    user = user || userBy('pub', session.client_reference_id);
+    if (!user) {
+      log('paid checkout for an unknown user', session.id);
+      return null;
+    }
+    q('UPDATE users SET stripe_customer = ?, stripe_sub = ?, pro_status = ?, pro_until = ?, pro_cancel = 0 WHERE id = ?')
+      .run(session.customer ? String(session.customer) : null, String(session.payment_intent || session.id), 'active', FOREVER, user.id);
     onChange();
-    log('pro', user.pub, sub.status, cancel ? 'cancels at period end' : '');
+    log('pro on', user.pub);
     return userBy('id', user.id);
   }
 
-  const refresh = async (subId, user) => (subId ? apply(await stripe('GET', '/subscriptions/' + subId), user) : null);
+  /** The payment was returned (refund in full, dispute): Pro goes with it. */
+  function revoke(paymentIntent, why) {
+    const user = userBy('stripe_sub', paymentIntent);
+    if (!user) return;
+    q('UPDATE users SET pro_status = ?, pro_until = 0 WHERE id = ?').run('refunded', user.id);
+    onChange();
+    log('pro off', user.pub, why);
+  }
 
   function verified(raw, header) {
     const parts = String(header || '').split(',').map((kv) => kv.split('='));
@@ -72,30 +76,19 @@ export function createBilling({ cfg, env, q, log, bad, isPro, allow, onChange })
     });
   }
 
-  async function handle(event) {
+  function handle(event) {
     const o = event.data.object;
-    if (event.type === 'checkout.session.completed') {
-      if (o.mode !== 'subscription') return;
-      const user = userBy('pub', o.client_reference_id);
-      if (!user) return log('checkout for an unknown user', o.id);
-      q('UPDATE users SET stripe_customer = ? WHERE id = ?').run(String(o.customer), user.id);
-      await refresh(o.subscription, user);
-    } else if (event.type.startsWith('customer.subscription.')) {
-      await refresh(o.id);
-    } else {
-      const d = o.parent && o.parent.subscription_details;
-      await refresh(o.subscription || (d && d.subscription));
-    }
+    if (event.type.startsWith('checkout.session.')) grant(o);
+    else if (event.type === 'charge.refunded') {
+      if (o.refunded) revoke(o.payment_intent, 'refund');
+    } else if (event.type === 'charge.dispute.created') revoke(o.payment_intent, 'dispute');
   }
 
   return {
-    publicConfig: () => ({ enabled, price: env.DC_PRO_PRICE || '2,99 €' }),
+    publicConfig: () => ({ enabled, price: env.DC_PRO_PRICE || '4,99 €' }),
 
-    /** Ends the subscription right away (the account is being deleted). */
-    async cancelNow(user) {
-      if (!enabled || !user.stripe_sub || !['active', 'trialing', 'past_due'].includes(user.pro_status)) return;
-      await stripe('DELETE', '/subscriptions/' + user.stripe_sub);
-    },
+    /** Nothing recurring to stop when an account is deleted. */
+    async cancelNow() {},
 
     routes(route, { auth, readJson, readBody, profile }) {
       const signedIn = (req) => {
@@ -111,11 +104,11 @@ export function createBilling({ cfg, env, q, log, bad, isPro, allow, onChange })
         if (isPro(user)) throw bad(409, 'already_pro');
         const b = await readJson(req);
         const session = await stripe('POST', '/checkout/sessions', {
-          mode: 'subscription',
+          mode: 'payment',
           line_items: [{ price, quantity: 1 }],
           client_reference_id: user.pub,
-          ...(user.stripe_customer ? { customer: user.stripe_customer } : { customer_email: user.email || undefined }),
-          subscription_data: { metadata: { user: user.pub } },
+          ...(user.stripe_customer ? { customer: user.stripe_customer } : { customer_email: user.email || undefined, customer_creation: 'always' }),
+          payment_intent_data: { metadata: { user: user.pub }, description: 'DailyClips Pro' },
           locale: b.lang === 'en' ? 'en' : 'es',
           success_url: `${cfg.baseUrl}/?pro=ok&cs={CHECKOUT_SESSION_ID}`,
           cancel_url: `${cfg.baseUrl}/?pro=back`,
@@ -130,18 +123,8 @@ export function createBilling({ cfg, env, q, log, bad, isPro, allow, onChange })
         if (!/^cs_[A-Za-z0-9_]{10,200}$/.test(b.cs || '')) throw bad(400, 'bad_session');
         const session = await stripe('GET', '/checkout/sessions/' + b.cs);
         if (session.client_reference_id !== user.pub) throw bad(403, 'not_yours');
-        const fresh = session.subscription ? await refresh(session.subscription, user) : null;
-        return profile(fresh || user);
+        return profile(grant(session, user) || user);
       });
-
-      const setCancel = (flag) => async (req) => {
-        const user = signedIn(req);
-        if (!user.stripe_sub) throw bad(404, 'no_subscription');
-        const sub = await stripe('POST', '/subscriptions/' + user.stripe_sub, { cancel_at_period_end: flag });
-        return profile(apply(sub, user) || user);
-      };
-      route('POST', /^\/api\/billing\/cancel$/, setCancel(true));
-      route('POST', /^\/api\/billing\/resume$/, setCancel(false));
 
       route('POST', /^\/api\/billing\/webhook$/, async (req) => {
         if (!enabled) throw bad(404, 'not_found');
@@ -149,7 +132,7 @@ export function createBilling({ cfg, env, q, log, bad, isPro, allow, onChange })
         if (!verified(raw, req.headers['stripe-signature'])) throw bad(400, 'bad_signature');
         const event = JSON.parse(raw.toString('utf8'));
         if (!EVENTS.has(event.type) || q('SELECT 1 x FROM stripe_events WHERE id = ?').get(event.id)) return { ok: true };
-        await handle(event); // a failure answers 500 and Stripe sends the event again
+        handle(event); // a failure answers 500 and Stripe sends the event again
         q('INSERT OR IGNORE INTO stripe_events (id, at) VALUES (?, ?)').run(event.id, Date.now());
         return { ok: true };
       });

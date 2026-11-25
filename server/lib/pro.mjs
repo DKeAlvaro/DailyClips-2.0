@@ -1,5 +1,5 @@
 // Gateway to the Pro scoring service (scorer/server.py). The API never scores anything itself: it
-// checks the subscription and the limits, hands the take to the scorer and passes the answer back.
+// checks that the account has Pro and the limits, hands the take to the scorer and passes the answer back.
 // The audio is held in memory for the length of the request and never written anywhere.
 import fs from 'node:fs';
 import path from 'node:path';

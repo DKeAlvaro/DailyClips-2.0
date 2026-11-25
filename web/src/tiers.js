@@ -1,7 +1,7 @@
 // The three scoring levels behind one interface. All of them return scores on the same 0-100 scale.
 //   web  word-level, the browser's own recogniser, nothing to download (default)
 //   dev  phoneme-level, a model downloaded once that runs on the phone (free, opt-in)
-//   pro  phoneme-level, scored on our server with a larger model (subscription)
+//   pro  phoneme-level, scored on our server with a larger model (one-time payment)
 import { S, save } from './store.js';
 import { listenWeb, webSupported } from './tier-web.js';
 import { extend } from './i18n.js';

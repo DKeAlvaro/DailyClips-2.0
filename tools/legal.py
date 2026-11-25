@@ -64,7 +64,7 @@ PRIVACY_ES = f"""
 <ul>
 <li><strong>Sin cuenta:</strong> un identificador aleatorio creado en tu navegador, tus resultados (nota del clip, nota de cada frase, nivel de nota y fecha) y un apodo generado, que es el que sale en el ranking. Nada de nombre ni correo.</li>
 <li><strong>Si entras con Google (opcional):</strong> el identificador de tu cuenta de Google, tu correo y tu nombre de pila. En el ranking sale tu nombre de pila; lo puedes cambiar por el apodo en Cuenta.</li>
-<li><strong>Si te suscribes a Pro:</strong> el identificador de cliente y de suscripción de Stripe y su estado. Los datos de la tarjeta los trata Stripe; aquí no llegan.</li>
+<li><strong>Si compras Pro:</strong> el identificador de cliente y de pago de Stripe y su estado. Los datos de la tarjeta los trata Stripe; aquí no llegan.</li>
 </ul>
 
 <h2>Tu voz</h2>
@@ -102,7 +102,7 @@ PRIVACY_EN = f"""
 <ul>
 <li><strong>Without an account:</strong> a random identifier created in your browser, your results (clip score, score of each line, scoring level and date) and a generated nickname, which is what appears on the ranking. No name, no email.</li>
 <li><strong>If you sign in with Google (optional):</strong> your Google account identifier, your email and your first name. The ranking shows your first name; you can switch to the nickname in Account.</li>
-<li><strong>If you subscribe to Pro:</strong> the Stripe customer and subscription identifiers and their status. Card details are handled by Stripe and never reach us.</li>
+<li><strong>If you buy Pro:</strong> the Stripe customer and payment identifiers and their status. Card details are handled by Stripe and never reach us.</li>
 </ul>
 
 <h2>Your voice</h2>
@@ -148,9 +148,9 @@ TERMS_ES = f"""
 
 <h2>Pro</h2>
 <ul>
-<li>Pro es una suscripción mensual de 2,99 € (impuestos incluidos) que se cobra con Stripe y se renueva cada mes hasta que la canceles.</li>
-<li>Puedes cancelar cuando quieras desde <strong>Cuenta</strong>. Sigues teniendo Pro hasta el final del periodo pagado y no se cobra más.</li>
-<li>Si te arrepientes en los 14 días siguientes a la primera compra, escribe a {MAIL} y se te devuelve el importe.</li>
+<li>Pro es un pago único de 4,99 € (impuestos incluidos) que se cobra con Stripe. No es una suscripción: no se renueva ni se vuelve a cobrar.</li>
+<li>Pro queda ligado a tu cuenta mientras el servicio exista.</li>
+<li>Si te arrepientes en los 14 días siguientes a la compra, escribe a {MAIL} y se te devuelve el importe.</li>
 <li>Pro tiene un límite de uso razonable por persona para que el servidor aguante. Si el servidor está ocupado, la app usa el nivel gratuito que tengas disponible.</li>
 </ul>
 
@@ -172,7 +172,7 @@ TERMS_EN = f"""
 <ul>
 <li>Everything can be used for free and without an account. The score is an automatic estimate meant for practice; it is not a certificate or an official assessment.</li>
 <li>The three scoring levels share one scale. Paying does not get you a higher score.</li>
-<li>The service is provided as is. It may change, fail or stop being available; if it shuts down, Pro subscribers will be told in advance.</li>
+<li>The service is provided as is. It may change, fail or stop being available; if it shuts down, people with Pro will be told in advance.</li>
 </ul>
 
 <h2>The videos</h2>
@@ -180,9 +180,9 @@ TERMS_EN = f"""
 
 <h2>Pro</h2>
 <ul>
-<li>Pro is a monthly subscription of €2.99 (taxes included), charged through Stripe and renewed every month until you cancel.</li>
-<li>You can cancel at any time from <strong>Account</strong>. You keep Pro until the end of the paid period and are not charged again.</li>
-<li>If you change your mind within 14 days of your first purchase, write to {MAIL} and you get a refund.</li>
+<li>Pro is a one-time payment of €4.99 (taxes included), charged through Stripe. It is not a subscription: it does not renew and you are not charged again.</li>
+<li>Pro stays with your account for as long as the service exists.</li>
+<li>If you change your mind within 14 days of the purchase, write to {MAIL} and you get a refund.</li>
 <li>Pro has a reasonable per-person usage limit so the server can cope. If the server is busy, the app uses the free level you have available.</li>
 </ul>
 

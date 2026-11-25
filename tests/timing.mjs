@@ -22,21 +22,26 @@ const kb = (n) => (n / 1024).toFixed(0) + ' kB';
 // ---- 1. first visit: everything the browser fetches until the clip is ready to play
 {
   const { context, page } = await launch({ headless: true });
-  const cdp = await context.newCDPSession(page);
-  await cdp.send('Network.enable');
+  // every request of every frame (the YouTube player lives in its own frame), bytes over the wire
   const urls = new Map(), sizes = new Map();
-  cdp.on('Network.requestWillBeSent', (e) => urls.set(e.requestId, e.request.url));
-  cdp.on('Network.loadingFinished', (e) => sizes.set(e.requestId, e.encodedDataLength));
+  let seq = 0;
+  context.on('requestfinished', async (req) => {
+    const id = ++seq;
+    urls.set(id, req.url());
+    const z = await req.sizes().catch(() => null);
+    if (z) sizes.set(id, z.responseBodySize + z.responseHeadersSize);
+  });
   const t0 = Date.now();
   await page.goto(base + '/', { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('.app.ready', { timeout: 20000 });
   const ready = Date.now() - t0;
-  await page.waitForTimeout(4000);
+  await page.waitForTimeout(5000);
   const groups = { own: 0, youtube: 0, google: 0, other: 0 };
   const own = [];
   let heavy = 0;
   for (const [id, url] of urls) {
     const size = sizes.get(id) || 0;
+    if (/^(data|blob):/.test(url)) continue;
     const host = new URL(url).host;
     if (/huggingface|onnxruntime|jsdelivr/.test(url)) heavy += size;
     if (host === new URL(base).host) {
