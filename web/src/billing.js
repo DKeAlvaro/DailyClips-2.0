@@ -13,7 +13,6 @@ extend({
     pro_price: '{price} al mes',
     pro_get: 'Hazte Pro · {price}/mes',
     pro_login: 'Para suscribirte, primero entra con Google (arriba).',
-    pro_fair: 'Pagar no da más nota: solo cambia cómo se calcula. Cancelas cuando quieras desde aquí.',
     pro_until: 'Se renueva el {d}.',
     pro_ends: 'Cancelada: tienes Pro hasta el {d}.',
     pro_cancel: 'Cancelar suscripción',
@@ -31,7 +30,6 @@ extend({
     pro_price: '{price} a month',
     pro_get: 'Go Pro · {price}/month',
     pro_login: 'To subscribe, sign in with Google first (above).',
-    pro_fair: "Paying doesn't raise your score: it only changes how it is computed. Cancel any time from here.",
     pro_until: 'Renews on {d}.',
     pro_ends: 'Cancelled: you keep Pro until {d}.',
     pro_cancel: 'Cancel subscription',
@@ -80,7 +78,7 @@ export function proCard(refresh) {
           refresh();
         }
       },
-    }, t('pro_get', { price }))), h('p.note', google ? t('pro_fair') : t('pro_login')));
+    }, t('pro_get', { price }))), google ? null : h('p.note', t('pro_login')));
     return card;
   }
   const on = S.tier === 'pro';

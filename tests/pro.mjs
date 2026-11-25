@@ -94,25 +94,28 @@ await page.screenshot({ path: path.join(shots, '1-card.png') });
 await page.tap('#gopro');
 await page.waitForURL(/checkout\.stripe\.com/, { timeout: 20000 });
 await page.waitForLoadState('domcontentloaded');
-const card = page.locator('#cardNumber');
-await page.waitForTimeout(3000);
-if (!(await card.isVisible().catch(() => false))) {
-  // several payment methods on offer: open the card one
-  const pick = page.locator('[data-testid="card-accordion-item-button"], #payment-method-accordion-item-title-card').first();
-  await pick.click({ timeout: 15000 }).catch(() => {});
+// Checkout draws its form inside one of Stripe's frames: find it by the card option and work in there
+let form = null;
+for (let i = 0; i < 40 && !form; i++) {
+  await page.waitForTimeout(500);
+  for (const f of page.frames()) {
+    if (await f.getByText(/^(Tarjeta|Card)$/).count().catch(() => 0)) form = f;
+  }
 }
+if (!form) throw new Error('Stripe Checkout did not show a card option');
 await page.screenshot({ path: path.join(shots, '2-checkout.png') });
-await card.waitFor({ timeout: 20000 });
-if (await page.locator('#email').isEditable().catch(() => false)) await page.fill('#email', `${sub}@example.com`);
-await card.fill('4242 4242 4242 4242');
-await page.fill('#cardExpiry', '12 / 34');
-await page.fill('#cardCvc', '123');
-if (await page.locator('#billingName').isVisible().catch(() => false)) await page.fill('#billingName', 'Test Payer');
-if (await page.locator('#billingCountry').isVisible().catch(() => false)) await page.selectOption('#billingCountry', 'ES').catch(() => {});
-if (await page.locator('#billingPostalCode').isVisible().catch(() => false)) await page.fill('#billingPostalCode', '28001');
-await page.waitForTimeout(500);
+const number = form.locator('#payment-numberInput');
+if (!(await number.isVisible().catch(() => false))) await form.getByText(/^(Tarjeta|Card)$/).first().click();
+await number.waitFor({ timeout: 20000 });
+await number.fill('4242 4242 4242 4242');
+await form.locator('#payment-expiryInput').fill('12 / 34');
+await form.locator('#payment-cvcInput').fill('123');
+if (await form.locator('#payment-nameInput').isVisible().catch(() => false)) await form.locator('#payment-nameInput').fill('Test Payer');
+if (await form.locator('#payment-countryInput').isVisible().catch(() => false)) await form.locator('#payment-countryInput').selectOption('ES').catch(() => {});
+if (await form.locator('#payment-postalCodeInput').isVisible().catch(() => false)) await form.locator('#payment-postalCodeInput').fill('28001');
+await page.waitForTimeout(800);
 await page.screenshot({ path: path.join(shots, '3-filled.png') });
-await page.locator('[data-testid="hosted-payment-submit-button"], .SubmitButton').first().click();
+await form.locator('[data-testid="payment-form-submit-button"]').click();
 let back = true;
 await page.waitForURL((u) => String(u).startsWith(base), { timeout: 60000 }).catch(() => {
   back = false;
