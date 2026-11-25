@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Sanity check and timing of the on-device level, in a real browser with the app's own code:
 // every reference audio is scored by the model running in ONNX Runtime Web.
-//   node tests/ref/device.mjs [--base http://localhost:8821] [--throttle 4] [--model work/models/student_q4.onnx]
+//   node tests/ref/device.mjs [--base http://localhost:8821] [--throttle 4] [--phrases 5] [--model work/models/student_q4.onnx]
 // --throttle N runs the model on the page's main thread under an N x CPU slowdown (how a phone feels).
 import { build } from 'esbuild';
 import fs from 'node:fs';
@@ -48,7 +48,7 @@ console.log(`model in memory after ${((Date.now() - t) / 1000).toFixed(1)} s${th
 
 const score = (unit, file) => page.evaluate(([u, pcm]) => window.DC.scoreAudio(u, new Float32Array(pcm)), [unit, pcmOf(file)]);
 const out = [];
-const n = texts.length;
+const n = Math.min(texts.length, Number(arg('phrases', texts.length)));
 for (let i = 0; i < n; i++) {
   const unit = { text: texts[i], ph: phones[i] };
   // native reference: the male native voice decides which phones count, as tools/prep/refs.py does per clip
