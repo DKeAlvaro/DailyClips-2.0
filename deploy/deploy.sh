@@ -2,6 +2,7 @@
 # Run on the server as root:  deploy.sh staging|prod
 # Pulls the checkout of that instance, rebuilds the front end and restarts its service.
 set -e
+umask 022
 inst=${1:?usage: deploy.sh staging|prod}
 cd /opt/dailyclips/"$inst"
 as() { runuser -u dailyclips -- "$@"; }
