@@ -1,0 +1,30 @@
+# Pro scoring service (scorer/server.py). One instance per machine; the API instances reach it through
+# DC_SCORER_URL with the shared DC_SCORER_KEY, so it can be moved to another machine as it is.
+# /opt/dailyclips/env/scorer.env: SCORER_MODEL, SCORER_KEY, SCORER_PORT (8830), SCORER_QUEUE (3)
+[Unit]
+Description=DailyClips Pro scorer
+After=network.target
+
+[Service]
+User=dailyclips
+Group=dailyclips
+WorkingDirectory=/opt/dailyclips/prod
+EnvironmentFile=/opt/dailyclips/env/scorer.env
+ExecStart=/usr/bin/python3 scorer/server.py
+Restart=always
+RestartSec=3
+
+# the model takes about half a gigabyte; it must never squeeze whatever else runs on the machine
+MemoryMax=900M
+MemorySwapMax=0
+CPUWeight=30
+Nice=10
+OOMScoreAdjust=500
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

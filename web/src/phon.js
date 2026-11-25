@@ -9,7 +9,7 @@ export const CAL = {
   // k: how fast a phone's score falls as its goodness of pronunciation drops
   // pts: [raw score of the model, common-scale score] for another sentence, Spanish accent, native
   dev: { k: 10, pts: [[0.25, 8], [0.58, 77], [0.78, 100]] },
-  pro: { k: 10, pts: [[0.36, 8], [0.63, 77], [0.82, 100]] },
+  pro: { k: 10, pts: [[0.24, 8], [0.56, 77], [0.88, 100]] },
 };
 
 /** Piecewise-linear map through the calibration points, clamped to 0-100. */

@@ -7,11 +7,12 @@ marked "0" in the phrase's mask and are not counted when a learner is scored. Re
 
     "m": {"dev": "110111...", "pro": "111101..."}      one character per canonical phoneme
 
-    python tools/prep/refs.py dev=work/models/student_q4.onnx [pro=work/models/lv60_int8.onnx] [slug ...]
+    python tools/prep/refs.py dev=work/models/student_q4.onnx [pro=work/models/lv60_mm8.onnx] [slug ...]
 
 Needs onnxruntime, numpy and edge-tts. Audio is cached in work/tts-ref/.
 """
 import json
+import os
 import subprocess
 import sys
 import wave
@@ -47,8 +48,9 @@ for f in sorted(QUEUE.glob("*.json")):
         jobs.append({"text": p["text"], "voice": VOICE.get(clip.get("accent", "us"), VOICE["us"]), "out": str(p["_wav"]), "rate": 16000, "pad": 0.4})
 
 TTS.mkdir(parents=True, exist_ok=True)
-(TTS / "jobs.json").write_text(json.dumps(jobs), encoding="utf-8")
-subprocess.run([sys.executable, str(ROOT / "tools" / "tts.py"), str(TTS / "jobs.json")], check=True)
+if not all(Path(j["out"]).exists() for j in jobs):  # the audio is cached: a machine without edge-tts can reuse it
+    (TTS / "jobs.json").write_text(json.dumps(jobs), encoding="utf-8")
+    subprocess.run([sys.executable, str(ROOT / "tools" / "tts.py"), str(TTS / "jobs.json")], check=True)
 
 
 def read_wav(path):
@@ -58,7 +60,7 @@ def read_wav(path):
 
 for name, path in models.items():
     so = ort.SessionOptions()
-    so.intra_op_num_threads = 2
+    so.intra_op_num_threads = int(os.environ.get("REFS_THREADS", "2"))
     sess = ort.InferenceSession(path, so, providers=["CPUExecutionProvider"])
     names = [i.name for i in sess.get_inputs()]
     kept = total = 0
