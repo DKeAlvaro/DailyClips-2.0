@@ -66,7 +66,7 @@ if (secret) {
   const dir = path.resolve('work/pro-audio');
   fs.mkdirSync(dir, { recursive: true });
   const pad = 0.7;
-  const job = { text: unit.text, voice: 'en-US-GuyNeural', out: path.join(dir, 'mic.wav'), rate: 48000, pad };
+  const job = { text: unit.text, voice: 'en-US-GuyNeural', out: path.join(dir, `${clip.yt}-${clip.phrases.indexOf(unit)}-mic.wav`), rate: 48000, pad };
   fs.writeFileSync(path.join(dir, 'jobs.json'), JSON.stringify([job]));
   spawnSync('python', ['tools/tts.py', path.join(dir, 'jobs.json')], { windowsHide: true });
   const wav = fs.readFileSync(job.out);

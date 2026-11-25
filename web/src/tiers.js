@@ -4,13 +4,21 @@
 //   pro  phoneme-level, scored on our server with a larger model (one-time payment)
 import { S, save } from './store.js';
 import { listenWeb, webSupported } from './tier-web.js';
-import { extend } from './i18n.js';
+import { extend, t } from './i18n.js';
+import { toast } from './dom.js';
 
 extend({
-  es: { tip_rare: '<b>{w}</b> · el reconocedor del navegador casi nunca entiende esta palabra: no cuenta para la nota' },
-  en: { tip_rare: "<b>{w}</b> · the browser's recogniser hardly ever gets this word: it doesn't count towards your score" },
+  es: {
+    dev_slow: 'A este móvil le cuesta el modelo: vuelvo al nivel web. Lo puedes reactivar en Cuenta.',
+    tip_rare: '<b>{w}</b> · el reconocedor del navegador casi nunca entiende esta palabra: no cuenta para la nota',
+  },
+  en: {
+    dev_slow: 'This phone struggles with the model: back to the web level. You can switch it on again in Account.',
+    tip_rare: "<b>{w}</b> · the browser's recogniser hardly ever gets this word: it doesn't count towards your score",
+  },
 });
 
+const SLOW_MS = 12000; // an on-device score that takes longer than this is not worth the wait
 let devModule = null;
 /** The on-device code is its own chunk: nobody downloads it until they pick that level. */
 export const device = () => devModule || (devModule = import('./tier-device.js'));
@@ -83,6 +91,12 @@ export function listen(unit, hooks) {
       save();
     }
     if (r.pcm) r = { ...r, pcm: undefined };
+    if (r.ok && tier === 'dev' && r.ms > SLOW_MS && webSupported()) {
+      // waiting this long for every line is worse than a word-level score: say so and step down
+      S.tier = 'web';
+      save();
+      toast(t('dev_slow'), 5000);
+    }
     return { ...r, tier };
   })();
   return { tier, promise, stop: () => { stopped = true; if (inner) inner.stop(); } };

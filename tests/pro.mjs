@@ -42,8 +42,8 @@ const unit = clip.phrases[idx];
 const dir = path.resolve('work/pro-audio');
 fs.mkdirSync(dir, { recursive: true });
 const jobs = [
-  { text: unit.text, voice: 'en-US-GuyNeural', out: path.join(dir, 'api.wav'), rate: 16000, pad: 0.3 },
-  { text: unit.text, voice: 'en-US-GuyNeural', out: path.join(dir, 'mic.wav'), rate: 48000, pad: 0.7 },
+  { text: unit.text, voice: 'en-US-GuyNeural', out: path.join(dir, `${clip.yt}-${idx}-api.wav`), rate: 16000, pad: 0.3 },
+  { text: unit.text, voice: 'en-US-GuyNeural', out: path.join(dir, `${clip.yt}-${idx}-mic.wav`), rate: 48000, pad: 0.7 },
 ];
 fs.writeFileSync(path.join(dir, 'jobs.json'), JSON.stringify(jobs));
 spawnSync('python', ['tools/tts.py', path.join(dir, 'jobs.json')], { windowsHide: true });
@@ -150,7 +150,7 @@ await page.tap('#mic');
 await page.waitForSelector('.deck.feedback', { timeout: 40000 });
 const took = Date.now() - tapAt;
 const shown = await page.evaluate(() => document.querySelector('.fbscore').firstChild.textContent);
-ok(proCalls.includes(200), 'a take in the app is scored by the server',
+ok(proCalls.includes(200) && Number(shown) >= 70, 'a take in the app is scored by the server, and a native voice scores high',
   `score ${shown}; ${(took / 1000).toFixed(1)} s from tapping the mic to the coloured words, the line itself lasts ${(pcm.length / 32000).toFixed(1)} s`);
 await page.waitForTimeout(700);
 await page.screenshot({ path: path.join(shots, '5-pro-feedback.png') });
