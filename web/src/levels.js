@@ -5,14 +5,15 @@ import { t, extend } from './i18n.js';
 import { webSupported } from './tier-web.js';
 import { device, deviceReady, deviceSupported, proActive } from './tiers.js';
 import { proCard } from './billing.js';
+import { ctx } from './ctx.js';
 
 extend({
   es: {
     lv_web: 'Web',
-    lv_web_sub: 'Nota por palabra con el reconocedor de tu navegador. Nada que descargar.',
+    lv_web_sub: 'Nota por palabra. Nada que descargar.',
     lv_web_off: 'Este navegador no trae reconocedor de voz.',
     lv_dev: 'En el dispositivo',
-    lv_dev_sub: 'Nota por sonido: ves qué sonidos fallas. El modelo se baja una vez ({mb} MB) y tu voz no sale del móvil.',
+    lv_dev_sub: 'Nota por sonido. Tu voz no sale del móvil.',
     lv_dev_get: 'Descargar {mb} MB',
     lv_dev_getting: 'Descargando… {p} %',
     lv_dev_remove: 'Borrar la descarga',
@@ -22,15 +23,13 @@ extend({
     lv_on: 'En uso',
     lv_free: 'Gratis',
     lv_use: 'Usar',
-    lv_same: 'Todos los niveles puntúan en la misma escala: ninguno da más nota que otro.',
-    snd_times: '{n} veces',
   },
   en: {
     lv_web: 'Web',
-    lv_web_sub: "Word-by-word score from your browser's recogniser. Nothing to download.",
+    lv_web_sub: 'Word-by-word score. Nothing to download.',
     lv_web_off: 'This browser has no speech recogniser.',
     lv_dev: 'On this device',
-    lv_dev_sub: 'Sound-by-sound score: you see which sounds you miss. The model downloads once ({mb} MB) and your voice stays on the phone.',
+    lv_dev_sub: 'Sound-by-sound score. Your voice stays on the phone.',
     lv_dev_get: 'Download {mb} MB',
     lv_dev_getting: 'Downloading… {p}%',
     lv_dev_remove: 'Remove the download',
@@ -40,12 +39,12 @@ extend({
     lv_on: 'In use',
     lv_free: 'Free',
     lv_use: 'Use',
-    lv_same: 'Every level scores on the same scale: none of them gives higher marks than another.',
-    snd_times: '{n} times',
   },
 });
 
 const MODEL_MB = 77;
+// 'Free' only says something next to a paid level
+const tag = (on) => (on ? h('em', t('lv_on')) : ctx.cfg.pro && ctx.cfg.pro.enabled ? h('em', t('lv_free')) : null);
 let downloading = null; // { p } while the model is coming down
 
 function choose(tier, refresh) {
@@ -57,7 +56,7 @@ function choose(tier, refresh) {
 function deviceCard(refresh) {
   const on = S.tier === 'dev' && deviceReady();
   const card = h('div.tier' + (on ? '.on' : ''),
-    h('b', t('lv_dev'), h('em', on ? t('lv_on') : t('lv_free'))),
+    h('b', t('lv_dev'), tag(on)),
     h('small', deviceSupported() ? t('lv_dev_sub', { mb: MODEL_MB }) : t('lv_dev_off')));
   if (!deviceSupported()) return card;
   if (downloading) {
@@ -113,7 +112,7 @@ function webCard(refresh) {
   const ok = webSupported();
   const on = ok && (S.tier === 'web' || (S.tier === 'dev' && !deviceReady()) || (S.tier === 'pro' && !proActive() && !deviceReady()));
   return h(ok && !on ? 'button.tier' : 'div.tier' + (on ? '.on' : ''), { onclick: ok && !on ? () => choose('web', refresh) : null },
-    h('b', t('lv_web'), h('em', on ? t('lv_on') : t('lv_free'))),
+    h('b', t('lv_web'), tag(on)),
     h('small', ok ? t('lv_web_sub') : t('lv_web_off')));
 }
 
@@ -121,7 +120,7 @@ function webCard(refresh) {
 export function tierPanel(refresh, { only } = {}) {
   const panel = h('div.blk', h('div.lbl', t('level')));
   if (only !== 'alt') panel.append(webCard(refresh));
-  panel.append(deviceCard(refresh), proCard(refresh), h('p.note', t('lv_same')));
+  panel.append(deviceCard(refresh), proCard(refresh));
   return panel;
 }
 
@@ -137,16 +136,19 @@ export function soundsPanel(list, openLevels) {
   }
   const rows = Object.entries(totals).filter(([, v]) => v[1] >= 3).map(([p, v]) => ({ p, avg: Math.round(v[0] / v[1]), n: v[1] }))
     .sort((a, b) => a.avg - b.avg).slice(0, 6);
+  const locked = !rows.length && !Object.keys(totals).length && !deviceReady() && !proActive();
+  if (locked) {
+    // the web level cannot tell sounds apart: one row that leads to the levels that can
+    return h('div.blk', h('button.set.locked', { onclick: openLevels }, h('div', icon('lock'), t('sounds')), icon('next')));
+  }
   const panel = h('div.blk', h('div.lbl', t('sounds')));
   if (!rows.length) {
-    const any = Object.keys(totals).length > 0;
-    panel.append(h('div.lock', icon('lock'), h('div', h('p.sub', { style: { margin: 0 } }, t(any || deviceReady() || proActive() ? 'sounds_empty_short' : 'sounds_lock')),
-      !deviceReady() && !proActive() && openLevels ? h('div.links', { style: { 'justify-content': 'flex-start', 'margin-top': '8px' } }, h('button', { onclick: openLevels }, t('sounds_more'))) : null)));
+    panel.append(h('p.sub', { style: { margin: 0 } }, t('sounds_empty_short')));
     return panel;
   }
   for (const r of rows) {
     const cls = r.avg >= 80 ? 'good' : r.avg >= 50 ? 'mid' : 'bad';
-    panel.append(h('div.snd', h('div', h('div.p', `/${r.p}/`), h('div.ex', t('snd_times', { n: r.n }))),
+    panel.append(h('div.snd', h('div.p', `/${r.p}/`),
       h('div.track', h('i', { style: { width: r.avg + '%', background: `var(--${cls})` } })), h('div.v', String(r.avg))));
   }
   return panel;

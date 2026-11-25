@@ -5,7 +5,7 @@ import { api } from './api.js';
 import { ctx, currentDay, isInApp, isIOS, isAndroid } from './ctx.js';
 import { t, lang, setLang, fmtDay } from './i18n.js';
 import { band } from './words.js';
-import { strip, standing } from './result.js';
+import { standing } from './result.js';
 import { shareClip } from './share.js';
 import { googleButton, loginAvailable, signedIn, logout, deleteAccount } from './auth.js';
 import { tierPanel, soundsPanel } from './levels.js';
@@ -114,7 +114,7 @@ function chart(list) {
   const pts = list.map((r, i) => `${x(i).toFixed(1)},${y(r.score).toFixed(1)}`);
   const area = `M${pts[0]} L${pts.join(' L')} L${x(n - 1).toFixed(1)},${H - pad} L${x(0).toFixed(1)},${H - pad} Z`;
   const dots = list.map((r, i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(r.score).toFixed(1)}" r="${i === n - 1 ? 5 : 3}" fill="${i === n - 1 ? 'var(--good)' : '#11120e'}" stroke="var(--good)" stroke-width="2"/>`).join('');
-  const grid = [0, 50, 100].map((v) => `<line x1="${pad}" x2="${W - pad}" y1="${y(v)}" y2="${y(v)}" stroke="rgba(246,244,236,.14)" stroke-dasharray="3 4"/><text x="${W - pad}" y="${y(v) - 3}" fill="#6f7065" font-size="9" font-family="ui-monospace,monospace" text-anchor="end">${v}</text>`).join('');
+  const grid = [0, 50, 100].map((v) => `<line x1="${pad}" x2="${W - pad}" y1="${y(v)}" y2="${y(v)}" stroke="rgba(246,244,236,.14)" stroke-dasharray="3 4" vector-effect="non-scaling-stroke"/>`).join('');
   const svg = `<svg class="chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img"><defs><linearGradient id="ga" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b9f33f" stop-opacity=".26"/><stop offset="1" stop-color="#b9f33f" stop-opacity="0"/></linearGradient></defs>${grid}<path d="${area}" fill="url(#ga)"/><polyline points="${pts.join(' ')}" fill="none" stroke="var(--good)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>${dots}</svg>`;
   return h('div', { html: svg });
 }
@@ -125,11 +125,12 @@ function calendar(today) {
   const d = new Date(today + 'T12:00:00Z');
   const monday = addDays(today, -((d.getUTCDay() + 6) % 7));
   const first = addDays(monday, -28);
-  const cal = h('div.cal', [...t('dow')].map((c) => h('div.dow', c)));
+  // five weeks of squares, Monday first: coloured = done that day, outlined = today
+  const cal = h('div.cal', { 'aria-hidden': 'true' });
   for (let i = 0; i < 35; i++) {
     const day = addDays(first, i);
     const cls = (byDay[day] != null ? '.' + band(byDay[day]) : '') + (day === today ? '.today' : '') + (day > today ? '.fut' : '');
-    cal.append(h('i' + cls, String(Number(day.slice(8)))));
+    cal.append(h('i' + cls));
   }
   return cal;
 }
@@ -145,8 +146,7 @@ function statsTab(body) {
     h('p.say', { 'data-k': 'streak', 'data-v': st.current }, icon('flame'), st.current > 1 ? t('streak_n', { n: st.current }) : st.current === 1 ? t('streak_1') : t('no_streak')),
     h('div.facts', fact(st.best, t('best_streak'), 'best'), fact(list.length, t('done_clips'), 'clips'), fact(avg == null ? '–' : avg, t('avg7'), 'avg'))));
   body.append(blk(t('cal'), calendar(today)));
-  if (list.length < 2) body.append(blk(t('evo'), h('div.empty', { html: t('evo_empty') })));
-  else {
+  if (list.length >= 2) { // one clip makes no trend: the chart waits for the second
     const k = Math.min(5, Math.floor(list.length / 2));
     const mean = (a) => Math.round(a.reduce((s, r) => s + r.score, 0) / a.length);
     const a = mean(list.slice(-k)), b = mean(list.slice(-2 * k, -k));
@@ -158,16 +158,21 @@ function statsTab(body) {
 // ------------------------------------------------------------------ ranking: today and this week
 
 function rankList(rows, meId) {
-  return h('ol.list', rows.map((r, i) => h('li.rk' + (r.u === meId ? '.me' : ''),
-    h('span.pos', String(i + 1)),
-    h('span.nm', r.name + (r.u === meId ? ` (${t('you').toLowerCase()})` : ''), r.days ? h('small', t('clips_n', { n: r.days })) : null),
-    h('span.sc', String(r.score)))));
+  // equal scores share a place (1, 1, 3), the same way the "you're #n" line counts
+  let pos = 0;
+  return h('ol.list', rows.map((r, i) => {
+    if (!i || r.score !== rows[i - 1].score) pos = i + 1;
+    return h('li.rk' + (r.u === meId ? '.me' : ''),
+      h('span.pos' + (pos === 1 ? '.top' : ''), String(pos)),
+      h('span.nm', r.name + (r.u === meId ? ` (${t('you').toLowerCase()})` : ''), r.days ? h('small', t(r.days === 1 ? 'clips_1' : 'clips_n', { n: r.days })) : null),
+      h('span.sc', String(r.score)));
+  }));
 }
 
 let rankView = 'day';
 
 async function rankTab(body) {
-  const pick = h('div.pick', [['day', ctx.clip.n === ctx.today ? t('today') : `Nº ${ctx.clip.n}`], ['week', t('week')]].map(([id, label]) =>
+  const pick = h('div.pick', [['day', ctx.clip.n === ctx.today ? t('today') : fmtDay(ctx.clip.day)], ['week', t('week')]].map(([id, label]) =>
     h('button' + (rankView === id ? '.on' : ''), { 'data-rank': id, onclick: () => { rankView = id; refresh(); } }, label)));
   body.append(pick);
   const meId = S.user && S.user.id;
@@ -179,7 +184,7 @@ async function rankTab(body) {
       return body.append(h('div.empty', t('net_fail')));
     }
     if (!wk.top.length) return body.append(h('div.empty', { html: t('week_empty') }));
-    return body.append(h('p.lbl', `${fmtDay(wk.from)} – ${fmtDay(wk.to)} · ${t('week_sub')}`), rankList(wk.top, meId));
+    return body.append(rankList(wk.top, meId));
   }
   const n = ctx.clip.n, mine = S.results[n];
   let stats;
@@ -191,9 +196,10 @@ async function rankTab(body) {
   if (!stats.count) return body.append(h('div.empty', { html: t('rank_empty') }));
   if (mine) {
     const st = standing(stats, mine.score);
-    body.append(h('p.lead', { html: st.total > 1 ? t('among', { pos: st.pos, n: st.total }) : t('among_1') }));
+    const total = Math.max(st.total, st.pos);
+    body.append(h('p.lead', { html: total > 1 ? t('among', { pos: st.pos, n: total }) : t('among_1') }));
   } else body.append(h('p.lead', t('rank_join')));
-  body.append(strip(stats, { me: mine ? mine.score : null }), rankList(stats.top, meId));
+  body.append(rankList(stats.top, meId));
   if (stats.count < 3) body.append(h('div.cta', h('button.btn.sm', { onclick: shareClip }, icon('share'), t('share_clip'))));
 }
 
@@ -215,8 +221,8 @@ async function clipsTab(body) {
       },
     },
     h('div.th', { style: { 'background-image': `url(https://i.ytimg.com/vi/${c.yt}/${c.ar < 1 ? 'oar2' : 'mqdefault'}.jpg)` } }),
-    h('div', h('div.t', c.title), h('div.d', `Nº ${c.n} · ${c.n === data.today ? t('today') : fmtDay(c.day)} · ${t('lines', { n: c.count })}`)),
-    mine ? h('div.s.' + band(mine.score) + '-t', String(mine.score)) : h('div.s.no', t('not_done')));
+    h('div', h('div.t', c.title), h('div.d', c.n === data.today ? t('today') : fmtDay(c.day))),
+    mine ? h('div.s.' + band(mine.score) + '-t', String(mine.score)) : h('div.s.no', { 'aria-label': t('not_done') }, icon('play')));
   })));
 }
 
