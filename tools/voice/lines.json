@@ -1,0 +1,20 @@
+{
+ "about": "What the mascot says, by moment. One voice for all of them. Audio: web/static/assets/voice1/<moment>-<n>.mp3 (n from 1), made by tools/voice/make.py.",
+ "voice": "Jessica",
+ "voice_id": "cgSgspJ2msm6clMCkdW9",
+ "lines": {
+  "take_perfect": ["Perfect!", "Nailed it!", "Flawless!", "Wow, perfect!", "That was perfect!", "Yes! Exactly like that!", "Ooh, you sound native!", "Boom! Perfect!", "Couldn't say it better!", "Spot on!", "A perfect one!", "Okay, show-off!"],
+  "take_great": ["So good!", "Great job!", "Love it!", "That sounded great!", "Really nice!", "Almost perfect!", "Ooh, nice one!", "You're on fire!", "Smooth!", "Very, very good!", "I like that!", "Great take!"],
+  "take_good": ["Not bad!", "Pretty good!", "Good one!", "Nice work!", "Getting there!", "That works!", "Good, keep going!", "Solid!", "Okay, I heard you!", "Good stuff!"],
+  "take_close": ["So close!", "Almost!", "Ooh, nearly!", "Close one!", "One more time?", "You almost had it!", "Try it again!", "Just a little more!", "Hmm, almost there!", "Again? You can do it!", "Nearly got it!", "Give it another go!"],
+  "take_low": ["Tricky one, huh?", "That one's hard!", "Let's try again!", "No worries, again!", "Listen once more!", "Slow down a little!", "Oops! One more?", "It's a tough line!", "Take your time!", "We'll get it!"],
+  "take_better": ["Better!", "Much better!", "See? Better!", "Now that's better!", "Big improvement!", "Yes! You fixed it!", "Way better this time!", "That's the one!"],
+  "take_silent": ["I didn't catch that!", "Hello? Say it again!", "A bit louder, please!", "I can't hear you!"],
+  "result_high": ["What a run! Amazing!", "You crushed this clip!", "Incredible! Go share that!", "That was a great round!", "Wow. Just wow!", "Top score energy!", "You made it look easy!", "Brilliant from start to finish!"],
+  "result_mid": ["Nice round! Well done!", "Good job today!", "That's a solid score!", "Well played!", "Not bad at all!", "Good work! Tomorrow, even better!"],
+  "result_low": ["Tough clip today!", "Hey, you finished it! Nice!", "That one was hard. Good try!", "Practice makes perfect!", "Tomorrow's a new clip!"],
+  "result_best": ["New record!", "Your best score ever!", "That's a new personal best!", "You beat your record!"],
+  "streak": ["Two days in a row!", "Three days! You're on a roll!", "Five-day streak! Wow!", "A whole week! Amazing!", "Ten days! Unstoppable!", "Your streak is growing!"],
+  "bye": ["See you tomorrow!", "Same time tomorrow?", "Come back tomorrow, okay?"]
+ }
+}
