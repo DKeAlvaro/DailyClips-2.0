@@ -30,6 +30,21 @@ export function numberWords(n) {
   return [String(n)];
 }
 
+const ORD = { one: 'first', two: 'second', three: 'third', five: 'fifth', eight: 'eighth', nine: 'ninth', twelve: 'twelfth' };
+
+/** 100 -> ["hundredth"], 21 -> ["twenty", "first"]: ordinals the way people say them. */
+export function ordinalWords(n) {
+  let w = numberWords(n);
+  if (w.length === 2 && w[0] === 'one' && ['hundred', 'thousand', 'million'].includes(w[1])) w = [w[1]];
+  const last = w[w.length - 1];
+  w[w.length - 1] = ORD[last] || (last.endsWith('y') ? last.slice(0, -1) + 'ieth' : last + 'th');
+  return w;
+}
+
+/** Same word in British and American spelling -> same key (colour/color, travelled/traveled, realise/realize). */
+const spell = (w) => (w.length < 5 ? w : w.replace(/our(s|ed|ing|ite|ites)?$/, 'or$1').replace(/ll(ed|ing|er|ers)$/, 'l$1')
+  .replace(/is(e|es|ed|ing|ation)$/, 'iz$1').replace(/ys(e|es|ed|ing)$/, 'yz$1').replace(/tre(s)?$/, 'ter$1').replace(/ogue(s)?$/, 'og$1'));
+
 /** Text -> comparable tokens. `map[i]` is the index of the display word each token came from. */
 export function tokens(text) {
   const out = [], map = [];
@@ -39,12 +54,15 @@ export function tokens(text) {
       let extra = null;
       if (/^\$/.test(part)) extra = 'dollars';
       if (/%$/.test(part)) extra = 'percent';
+      const clock = /^(\d{1,2}):(\d{2})\D*$/.exec(part); // "4:30" is how recognisers write "four thirty"
       part = part.toLowerCase().replace(/[^a-z0-9']/g, '');
       if (!part) continue;
       const bare = part.replace(/'/g, '');
       let toks;
-      if (/^\d+$/.test(bare)) toks = numberWords(Number(bare));
-      else if (/^\d+(st|nd|rd|th|s)$/.test(bare)) toks = [...numberWords(parseInt(bare, 10)), bare.replace(/^\d+/, '')];
+      if (clock) toks = [...numberWords(Number(clock[1])), ...(Number(clock[2]) ? numberWords(Number(clock[2])) : ['oclock'])];
+      else if (/^\d+$/.test(bare)) toks = numberWords(Number(bare));
+      else if (/^\d+(st|nd|rd|th)$/.test(bare)) toks = ordinalWords(parseInt(bare, 10));
+      else if (/^\d+s$/.test(bare)) toks = [...numberWords(parseInt(bare, 10)), 's'];
       else toks = EXPAND[bare] || [bare];
       if (extra) toks = [...toks, extra];
       for (const t of toks) {
@@ -71,6 +89,7 @@ function lev(a, b) {
 export function sim(e, h) {
   if (e === h) return 1;
   if (CLASS.has(e) && CLASS.get(e) === CLASS.get(h)) return 1;
+  if (spell(e) === spell(h)) return 1;
   const strip = (w) => w.replace(/(s|ed|d|ing|es)$/, '');
   if (e.length > 3 && h.length > 3 && strip(e) === strip(h)) return 0.5;
   const L = Math.max(e.length, h.length);

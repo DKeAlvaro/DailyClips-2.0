@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 """Builds the inputs for align.py from clips already fetched with fetch.py.
 
-    python tools/prep/pack.py work/picks.py work/align-in
+    python tools/prep/pack.py clips/picks.json work/align-in [ID ...]
 
 For every pick it cuts the audio to the rough window (plus margin, at sentence boundaries of the
 Whisper transcript) and writes <out>/<id>/a16.wav and text.json {text, accent, offset}.
 """
-import importlib.util
 import json
 import subprocess
 import sys
@@ -17,14 +16,15 @@ NOWIN = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 sys.path.insert(0, str(Path(__file__).parent))
 from fetch import is_sentence_end  # noqa: E402
 
-spec = importlib.util.spec_from_file_location("picks", sys.argv[1])
-picks = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(picks)
+picks = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
 out = Path(sys.argv[2])
+only = set(sys.argv[3:])
 
-for line in picks.PICKS.strip().splitlines():
-    vid, accent, a, b = line.split()
-    a, b = float(a), float(b)
+for pick in picks:
+    vid, accent = pick["yt"], pick.get("accent", "us")
+    a, b = pick["win"]
+    if only and vid not in only:
+        continue
     d = ROOT / "work" / "clips" / vid
     asr = json.loads((d / "asr.json").read_text(encoding="utf-8"))
     words = [w for w in asr["words"] if w["word"].strip()]
@@ -36,11 +36,10 @@ for line in picks.PICKS.strip().splitlines():
     t0 = max(0.0, words[first]["start"] - 0.7) if first else 0.0
     t1 = words[last]["end"] + 0.9
     text = " ".join(w["word"].strip() for w in words[first:last + 1])
-    for fid, wrong, right in picks.FIXES:
-        if fid == vid:
-            if wrong not in text:
-                print(f"  {vid}: fix not found: {wrong!r}")
-            text = text.replace(wrong, right)
+    for wrong, right in pick.get("fix", []):
+        if wrong not in text:
+            print(f"  {vid}: fix not found: {wrong!r}")
+        text = text.replace(wrong, right)
     o = out / vid
     o.mkdir(parents=True, exist_ok=True)
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", f"{t0:.2f}", "-to", f"{t1:.2f}", "-i", str(d / "a16.wav"),

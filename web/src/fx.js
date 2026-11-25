@@ -12,6 +12,9 @@ function ctx() {
   return ac;
 }
 
+/** The shared AudioContext. Call it from inside a tap: iOS only lets audio start there. */
+export const audioContext = () => ctx();
+
 /** notes: [frequency Hz, start s, duration s, gain] */
 function play(notes, type = 'sine') {
   if (!S.sound) return;
