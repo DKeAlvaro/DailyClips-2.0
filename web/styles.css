@@ -115,7 +115,7 @@ svg { display: block; }
 @keyframes tint { from { color: #fff; } }
 .feedback .w.g { color: var(--good); }
 .feedback .w.c { color: var(--mid); }
-.feedback .w.m { color: var(--bad); text-decoration: underline wavy var(--bad); text-decoration-thickness: 2px; text-underline-offset: 0.2em; text-decoration-skip-ink: none; }
+.feedback .w.m { color: var(--bad); -webkit-text-decoration: underline wavy var(--bad); text-decoration-line: underline; text-decoration-style: wavy; text-decoration-color: var(--bad); text-decoration-thickness: 2px; text-underline-offset: 0.2em; text-decoration-skip-ink: none; }
 .feedback .w.n { color: rgba(255, 255, 255, 0.62); }
 .feedback .w.sel { background: rgba(255, 255, 255, 0.13); }
 
@@ -185,7 +185,7 @@ svg { display: block; }
 .rseg.g i { background: var(--good); } .rseg.c i { background: var(--mid); } .rseg.m i { background: var(--bad); }
 .stub { margin-top: 18px; border-top: 1px solid var(--line); height: 74px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .stub .k { font: 500 14px/1 var(--body); color: var(--mut); }
-.stub .n { font: 800 24px/1 var(--disp); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; margin-top: 6px; display: flex; align-items: center; gap: 5px; }
+.stub .n { font: 800 24px/1 var(--disp); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; display: flex; align-items: center; gap: 5px; }
 .stub .n svg { width: 20px; height: 20px; color: var(--flame); }
 .stub .r { text-align: right; }
 .week { display: flex; gap: 5px; margin-left: 6px; }

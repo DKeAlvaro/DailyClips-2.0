@@ -105,7 +105,7 @@ function scorecard(rec, { fresh, practiceScore }) {
     h('div.tscore', big, h('div.verdict', practiceScore != null ? t('practice_score', { n: practiceScore }) : verdict(rec.score))),
     h('div.rsegs', { 'aria-hidden': 'true' }, rec.phrases.map((v, i) => h('div.rseg.' + band(v), { style: { '--i': i, '--v': Math.max(8, v) / 100 } }, h('i')))),
     h('div.stub',
-      h('div', h('div.k', t('streak')), h('div.n', icon('flame'), String(st.current), weekDots())),
+      h('div.n', { 'aria-label': t('streak') }, icon('flame'), String(st.current), weekDots()),
       tomorrow()));
   return { node, big };
 }
