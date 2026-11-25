@@ -1,5 +1,5 @@
-// What you get after a clip: a ticket with your score, then the reasons to come back and compare.
-// Order on screen: ticket (score, lines, streak, tomorrow) -> share -> where you stand -> challenge -> keep it.
+// What you get after a clip: a card with your score, then the reasons to come back and compare.
+// Order on screen: score card (score, lines, streak, tomorrow) -> share -> where you stand -> challenge -> keep it.
 import { h, $, icon, countUp } from './dom.js';
 import { S, streak, addDays } from './store.js';
 import { api } from './api.js';
@@ -60,7 +60,7 @@ export function strip(stats, { me = null, vs = null } = {}) {
   return box;
 }
 
-/** This week, Monday to Sunday: a punched hole for every day done. */
+/** This week, Monday to Sunday: a filled dot for every day done. */
 function weekDots() {
   const today = currentDay();
   const d = new Date(today + 'T12:00:00Z');
@@ -72,10 +72,10 @@ function weekDots() {
   }));
 }
 
-/** Right half of the ticket stub: the countdown to tomorrow's clip, or the way back to today's. */
+/** Right half of the card's last row: the countdown to tomorrow's clip, or the way back to today's. */
 function tomorrow() {
   if (ctx.clip.n !== ctx.today) {
-    return h('div.r', h('button.btn.sm', { style: { color: 'var(--pink)', 'border-color': 'var(--pink)', padding: '0 14px', flex: 'none' }, onclick: () => ctx.act.openClip(ctx.today) }, t('today_clip'), icon('next')));
+    return h('div.r', h('button.btn.sm', { style: { padding: '0 14px', flex: 'none' }, onclick: () => ctx.act.openClip(ctx.today) }, t('today_clip'), icon('next')));
   }
   const count = h('div.count', '--:--:--');
   const box = h('div.r', h('div.k', t('next_in')), count);
@@ -84,7 +84,7 @@ function tomorrow() {
     if (left <= 0) {
       clearInterval(timer);
       box.textContent = '';
-      box.append(h('button.btn.sm', { style: { color: 'var(--pink)', 'border-color': 'var(--pink)', padding: '0 14px' }, onclick: () => location.assign('/') }, t('new_clip'), icon('next')));
+      box.append(h('button.btn.sm', { style: { padding: '0 14px' }, onclick: () => location.assign('/') }, t('new_clip'), icon('next')));
       return;
     }
     const s = Math.floor(left / 1000), p = (n) => String(n).padStart(2, '0');
@@ -96,15 +96,14 @@ function tomorrow() {
   return box;
 }
 
-function ticket(rec, { fresh, practiceScore }) {
+function scorecard(rec, { fresh, practiceScore }) {
   const clip = ctx.clip, st = streak(currentDay());
-  const big = h('span.big' + (band(rec.score) === 'c' ? '.c-h' : band(rec.score) === 'm' ? '.m-h' : ''), fresh ? '0' : String(rec.score));
-  // title, the score, one bar per line (taller = better), then the stub: streak and the next clip
-  const node = h('div.ticket', { id: 'ticket' },
+  const big = h('span.big.' + band(rec.score) + '-t', fresh ? '0' : String(rec.score));
+  // title, the score in its colour and what it means, one bar per line (taller = better), then streak and the next clip
+  const node = h('div.scorecard',
     h('div.ttitle', clip.title),
-    h('div.tscore', big, h('div.verdict.' + band(practiceScore != null ? practiceScore : rec.score), practiceScore != null ? t('practice_stamp', { n: practiceScore }) : verdict(rec.score))),
+    h('div.tscore', big, h('div.verdict', practiceScore != null ? t('practice_score', { n: practiceScore }) : verdict(rec.score))),
     h('div.rsegs', { 'aria-hidden': 'true' }, rec.phrases.map((v, i) => h('div.rseg.' + band(v), { style: { '--i': i, '--v': Math.max(8, v) / 100 } }, h('i')))),
-    h('div.tear'),
     h('div.stub',
       h('div', h('div.k', t('streak')), h('div.n', icon('flame'), String(st.current), weekDots())),
       tomorrow()));
@@ -141,7 +140,7 @@ export function showResult({ fresh = false, practiceScore = null, keepScroll = f
   if (!rec) return;
   const scroll = el ? el.scrollTop : 0;
   hideResult();
-  const tk = ticket(rec, { fresh, practiceScore });
+  const tk = scorecard(rec, { fresh, practiceScore });
   const stand = h('div.sec');
   el = h('div.result', { id: 'result' },
     tk.node,

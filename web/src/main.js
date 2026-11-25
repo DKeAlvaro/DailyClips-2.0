@@ -464,7 +464,7 @@ function renderCard(msg) {
   } else if (mode === 'feedback') {
     const last = i === s.units.length - 1;
     kids.push(
-      h('div.fb', h('div.stamp.fbscore.' + band(res.score) + '-t', String(res.score)),
+      h('div.fb', h('div.fbscore.' + band(res.score) + '-t', String(res.score)),
         h('div.fbtxt', tip, s.best[i] > res.score ? h('p.keep', { html: t('best_is', { n: s.best[i] }) }) : null)),
       h('div.btns',
         h('button.btn', { disabled: !s.practice && left <= 0, onclick: () => playUnit(i, { replay: true }) }, icon('replay'), t('retry'), dots()),

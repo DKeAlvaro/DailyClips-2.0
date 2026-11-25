@@ -163,7 +163,7 @@ function rankList(rows, meId) {
   return h('ol.list', rows.map((r, i) => {
     if (!i || r.score !== rows[i - 1].score) pos = i + 1;
     return h('li.rk' + (r.u === meId ? '.me' : ''),
-      h('span.pos' + (pos === 1 ? '.top' : ''), String(pos)),
+      h('span.pos' + (pos === 1 ? '.first' : ''), String(pos)),
       h('span.nm', r.name + (r.u === meId ? ` (${t('you').toLowerCase()})` : ''), r.days ? h('small', t(r.days === 1 ? 'clips_1' : 'clips_n', { n: r.days })) : null),
       h('span.sc', String(r.score)));
   }));
