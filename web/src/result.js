@@ -127,13 +127,13 @@ function duelSection(rec) {
   if (!vs || vs.n !== ctx.clip.n || vs.id === rec.id) return null;
   const d = rec.score - vs.score;
   const head = d > 0 ? t('duel_win', { name: vs.name, d }) : d < 0 ? t('duel_lose', { name: vs.name, d: -d }) : t('duel_tie', { name: vs.name });
-  const grid = h('div.duel');
+  // line by line, back to back: your bars grow left, theirs right; the totals line doubles as the key
+  const grid = h('div.duel', { 'aria-hidden': 'true' });
   rec.phrases.forEach((a, i) => {
     const b = vs.phrases[i] ?? 0;
-    grid.append(h('div.a', String(a), h('i', { style: { width: Math.max(4, a * 0.9) + 'px' } })), h('div.k', String(i + 1)),
-      h('div.b', h('i', { style: { width: Math.max(4, b * 0.9) + 'px' } }), String(b)));
+    grid.append(h('div.a', h('i', { style: { width: Math.max(3, a) + '%' } })), h('div.b', h('i', { style: { width: Math.max(3, b) + '%' } })));
   });
-  return h('div.sec', h('h3', head), h('p.sub', `${t('you')} ${rec.score} · ${vs.name} ${vs.score}`), grid);
+  return h('div.sec', h('h3', head), h('p.sub.vs', h('span.a', `${t('you')} ${rec.score}`), ' · ', h('span.b', `${vs.name} ${vs.score}`)), grid);
 }
 
 export function showResult({ fresh = false, practiceScore = null, keepScroll = false } = {}) {

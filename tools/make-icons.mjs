@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const font = fs.readFileSync(path.join(root, 'web/fonts/bricolage.woff2')).toString('base64');
+const font = fs.readFileSync(path.join(root, 'web/fonts/gabarito.woff2')).toString('base64');
 const mark = (size, pad) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="${size}" height="${size}"><rect width="64" height="64" rx="${pad ? 0 : 15}" fill="#0a0b0d"/><g transform="${pad ? 'translate(8 8) scale(.75)' : ''}"><path d="M24 19v26a2 2 0 0 0 3 1.7l21-13a2 2 0 0 0 0-3.4L27 17.3A2 2 0 0 0 24 19Z" fill="#b9f33f"/><rect x="12" y="24" width="5" height="16" rx="2.5" fill="#b9f33f" opacity=".55"/></g></svg>`;
 const page = (body, w, h) => `<!doctype html><html><head><style>
 @font-face{font-family:B;src:url(data:font/woff2;base64,${font}) format("woff2");font-weight:200 800}

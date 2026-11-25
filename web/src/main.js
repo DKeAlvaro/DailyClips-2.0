@@ -457,7 +457,8 @@ function renderCard(msg) {
         h('button.side', { onclick: () => playUnit(i, { replay: true, slow: true }), 'aria-label': t('slow') }, '0.75×'),
         dots()));
   } else if (mode === 'listening' || mode === 'scoring') {
-    kids.push(h('p.hint', t(mode === 'listening' ? 'listening' : 'scoring')),
+    // the red mic says it already; the words are only spelled out the first time, like "your turn"
+    kids.push(!S.seen.mic ? h('p.hint', t(mode === 'listening' ? 'listening' : 'scoring')) : null,
       h('div.ctrl', { style: { 'justify-content': 'center' } },
         h('button.mic', { onclick: () => s.handle && s.handle.stop(), 'aria-label': 'stop', id: 'mic' }, icon('stop'))));
   } else if (mode === 'feedback') {

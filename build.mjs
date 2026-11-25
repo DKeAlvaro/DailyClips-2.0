@@ -18,8 +18,8 @@ fs.rmSync(tmp, { recursive: true, force: true });
 fs.mkdirSync(path.join(tmp, 'assets'), { recursive: true });
 fs.cpSync(path.join(src, 'static'), tmp, { recursive: true });
 
-const font = fs.readFileSync(path.join(src, 'fonts', 'bricolage.woff2'));
-const fontName = `bricolage.${hash(font)}.woff2`;
+const font = fs.readFileSync(path.join(src, 'fonts', 'gabarito.woff2'));
+const fontName = `gabarito.${hash(font)}.woff2`;
 fs.writeFileSync(path.join(tmp, 'assets', fontName), font);
 
 const res = await build({
