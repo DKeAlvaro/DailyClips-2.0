@@ -1,0 +1,22 @@
+{
+  "name": "dailyclips",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Daily English pronunciation practice with short clips",
+  "scripts": {
+    "build": "node build.mjs",
+    "dev": "node build.mjs && node server/api.mjs",
+    "start": "node server/api.mjs",
+    "test:e2e": "node tests/e2e.mjs"
+  },
+  "dependencies": {
+    "esbuild": "^0.28.2"
+  },
+  "devDependencies": {
+    "playwright": "^1.65.1"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

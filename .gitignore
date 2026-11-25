@@ -1,0 +1,22 @@
+# local-only material
+old/
+PROMPT.md
+.env
+.env.*
+work/
+data/
+dist/
+node_modules/
+test-results/
+playwright-report/
+__pycache__/
+*.pyc
+*.wav
+*.m4a
+*.mp3
+*.mp4
+*.onnx
+*.db
+*.db-wal
+*.db-shm
+.DS_Store
