@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Prueba de sonido</title>
+<style>
+body{margin:0;padding:24px 20px;font:18px/1.4 system-ui,sans-serif;background:#0b0c0a;color:#f6f4ec}
+h1{font-size:24px;margin:0 0 6px}
+p{color:#a9a99c;margin:6px 0 18px}
+button{display:block;width:100%;font:inherit;font-weight:700;padding:20px;margin:10px 0;border:0;border-radius:14px;background:#b9f33f;color:#12160a}
+button.no{background:#ff7a66}
+#step{font-size:20px;margin:18px 0 4px}
+</style>
+</head>
+<body>
+<h1>Prueba de sonido</h1>
+<p>Sube el volumen multimedia. En cada paso pulsa el botón y di qué oyes.</p>
+<div id="step"></div>
+<p id="hint"></p>
+<div id="ui"></div>
+<script>
+'use strict';
+var id = Math.random().toString(36).slice(2, 8);
+var t0 = performance.now();
+function log(o) {
+  o.id = id;
+  o.t = Math.round(performance.now() - t0);
+  try {
+    fetch('/api/diag', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(o), keepalive: true }).catch(function () {});
+  } catch (e) { /* offline */ }
+}
+function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+log({
+  ev: 'start', ua: navigator.userAgent, secure: window.isSecureContext,
+  ac: !!(window.AudioContext || window.webkitAudioContext), sr: !!(window.SpeechRecognition || window.webkitSpeechRecognition),
+  audioSession: navigator.audioSession ? navigator.audioSession.type : 'n/a',
+});
+
+// a tone as a WAV blob
+function toneUrl(hz, sec) {
+  var rate = 22050, n = Math.round(rate * sec), buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf);
+  function str(o, s) { for (var k = 0; k < s.length; k++) v.setUint8(o + k, s.charCodeAt(k)); }
+  str(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); str(8, 'WAVEfmt ');
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+  str(36, 'data'); v.setUint32(40, n * 2, true);
+  for (var k = 0; k < n; k++) v.setInt16(44 + k * 2, Math.sin(2 * Math.PI * hz * k / rate) * 0.6 * Math.min(1, k / 300, (n - k) / 300) * 32767, true);
+  return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
+}
+
+var ac = null;
+function ctx() {
+  if (!ac) {
+    var C = window.AudioContext || window.webkitAudioContext;
+    ac = new C();
+  }
+  if (ac.state !== 'running') ac.resume();
+  return ac;
+}
+
+function playOne() {
+  var a = new Audio(toneUrl(440, 1.2));
+  var p = a.play();
+  return Promise.resolve(p).then(function () { return 'ok'; }, function (e) { return e.name + ': ' + e.message; }).then(function (r) {
+    return sleep(500).then(function () { log({ ev: 'el', r: r, paused: a.paused, ct: +a.currentTime.toFixed(2), ready: a.readyState, muted: a.muted, vol: a.volume }); });
+  });
+}
+
+// the microphone listens, then five beeps (each higher than the last) sound at these delays after it ended
+var AT = [150, 750, 1400, 2100, 3000], HZ = [330, 392, 494, 587, 698];
+function beeps(kind) {
+  var els = kind === 'audio' ? HZ.map(function (hz) { var a = new Audio(toneUrl(hz, 0.3)); a.preload = 'auto'; return a; }) : null;
+  return function () {
+    var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    var a = ctx();
+    return new Promise(function (done) {
+      var ended = false, tEnd = 0;
+      function fin() {
+        if (ended) return;
+        ended = true;
+        tEnd = performance.now();
+        log({ ev: 'sr_end', kind: kind });
+        AT.forEach(function (ms, k) {
+          setTimeout(function () {
+            var r = 'ok';
+            if (els) {
+              var p = els[k].play();
+              if (p && p.catch) p.catch(function (e) { log({ ev: 'beep_refused', k: k, e: e.name }); });
+            } else {
+              var o = a.createOscillator(), g = a.createGain();
+              g.gain.value = 0.6; o.frequency.value = HZ[k];
+              o.connect(g); g.connect(a.destination);
+              o.start(); o.stop(a.currentTime + 0.3);
+              r = a.state;
+            }
+            log({ ev: 'beep', kind: kind, k: k, after: Math.round(performance.now() - tEnd), r: r });
+          }, ms);
+        });
+        setTimeout(done, 3800);
+      }
+      if (!SR) { log({ ev: 'sr', err: 'unsupported' }); return fin(); }
+      var rec = new SR();
+      rec.lang = 'en-US';
+      ['start', 'audiostart', 'soundstart', 'speechstart', 'speechend', 'soundend', 'audioend'].forEach(function (n) {
+        rec.addEventListener(n, function () { log({ ev: 'sr_' + n }); });
+      });
+      rec.onresult = function (e) { log({ ev: 'sr_result', text: e.results[0][0].transcript }); };
+      rec.onerror = function (e) { log({ ev: 'sr_error', e: e.error }); };
+      rec.onend = fin;
+      setTimeout(function () { try { rec.stop(); } catch (e) { /* done */ } }, 6000);
+      try { rec.start(); } catch (e) { log({ ev: 'sr_start_error', e: String(e) }); fin(); }
+    });
+  };
+}
+
+var steps = [
+  { k: 'audio_wav', title: '1 de 3: pitido', hint: 'Pulsa y escucha un pitido.', run: playOne, ask: 'one' },
+  { k: 'sr_audio', title: '2 de 3: micrófono y 5 pitidos', hint: 'Pulsa, di "hola" y espera. Al acabar suenan 5 pitidos seguidos, cada uno más agudo.', run: beeps('audio'), ask: 'five' },
+  { k: 'sr_webaudio', title: '3 de 3: otra vez', hint: 'Igual: pulsa, di "hola" y espera los 5 pitidos.', run: beeps('webaudio'), ask: 'five' },
+];
+var i = 0;
+var stepEl = document.getElementById('step'), hintEl = document.getElementById('hint'), ui = document.getElementById('ui');
+
+function button(text, cls, fn) {
+  var b = document.createElement('button');
+  b.textContent = text;
+  if (cls) b.className = cls;
+  b.onclick = fn;
+  ui.appendChild(b);
+}
+function show() {
+  ui.textContent = '';
+  if (i >= steps.length) {
+    stepEl.textContent = 'Listo';
+    hintEl.textContent = 'Ya está, gracias. Dile a Claude que has terminado.';
+    log({ ev: 'done' });
+    return;
+  }
+  var s = steps[i];
+  stepEl.textContent = s.title;
+  hintEl.textContent = s.hint;
+  button('Empezar', '', function () {
+    ui.textContent = '';
+    hintEl.textContent = s.ask === 'five' ? 'Habla ahora...' : 'Escuchando...';
+    Promise.resolve(s.run()).then(function () {
+      function answer(label, val, cls) {
+        button(label, cls, function () { log({ ev: 'heard', k: s.k, heard: val }); i++; show(); });
+      }
+      ui.textContent = '';
+      if (s.ask === 'one') {
+        hintEl.textContent = '¿Lo has oído?';
+        answer('Sí, se oye', 'yes');
+        answer('No se oye', 'no', 'no');
+      } else {
+        hintEl.textContent = '¿Cuáles de los 5 pitidos has oído?';
+        answer('Los 5', 'from1');
+        answer('Del 2º en adelante', 'from2');
+        answer('Del 3º en adelante', 'from3');
+        answer('Del 4º en adelante', 'from4');
+        answer('Solo el 5º', 'from5');
+        answer('Ninguno', 'none', 'no');
+      }
+    });
+  });
+}
+show();
+</script>
+</body>
+</html>

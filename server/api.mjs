@@ -508,6 +508,14 @@ route('POST', /^\/api\/report$/, async (req) => {
   return { ok: true };
 });
 
+route('POST', /^\/api\/diag$/, async (req) => {
+  // staging only: a phone reports what the sound test page saw (web/static/diag.html)
+  if (!cfg.testSecret) throw bad(404, 'not_found');
+  if (!allow('diag:' + req.ip, 120, 3600e3)) return { ok: true };
+  log('DIAG', JSON.stringify(await readJson(req)).slice(0, 2000));
+  return { ok: true };
+});
+
 route('POST', /^\/internal\/publish$/, async (req) => {
   // called by the daily cron from localhost
   if (!cfg.adminSecret || !safeEqual(req.headers['x-admin'] || '', cfg.adminSecret)) throw bad(404, 'not_found');
