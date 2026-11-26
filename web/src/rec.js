@@ -40,7 +40,7 @@ export function record({ maxMs = 12000, onLevel, onStart } = {}) {
     } catch (e) {
       return { ok: false, why: e && (e.name === 'NotAllowedError' || e.name === 'SecurityError') ? 'denied' : 'nomic' };
     }
-    if (ac.state === 'suspended') await ac.resume().catch(() => {});
+    if (ac.state !== 'running') await ac.resume().catch(() => {});
     const src = ac.createMediaStreamSource(stream);
     // ScriptProcessor is the one capture node every mobile browser ships; the blocks are tiny.
     const node = ac.createScriptProcessor(2048, 1, 1);

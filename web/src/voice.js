@@ -1,7 +1,7 @@
-// Her voice: short recorded reactions, fetched on demand and played through the app's AudioContext.
+// Her voice: short recorded reactions, fetched on demand and played on an <audio> element (see fx.js).
 //   say('take_great', { onTalk: (on) => talking(el, on) })  ->  { promise, stop }
 import { S } from './store.js';
-import { audioContext } from './fx.js';
+import { playUrl } from './fx.js';
 
 /** Lines per moment, in the order of tools/voice/lines.json (tools/voice/check.mjs keeps them equal). */
 export const COUNTS = {
@@ -13,7 +13,7 @@ const file = (m, n) => `/assets/voice1/${m}-${n}.mp3`;
 const VOLUME = 0.9;
 const GAP = 350; // ms between two lines of sayAll()
 
-const buffers = new Map(); // url -> Promise<AudioBuffer | null>, for the session
+const files = new Map(); // url -> Promise<blob URL | null>, for the session
 const recent = {}; // moment -> numbers said lately, newest last
 const ready = {}; // moment -> number picked ahead by warm()
 let line = null; // the line playing now
@@ -32,17 +32,17 @@ function pick(m) {
   return i;
 }
 
-function load(url, a) {
-  let p = buffers.get(url);
+function load(url) {
+  let p = files.get(url);
   if (!p) {
     p = fetch(url)
       .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(r.status)))
-      .then((b) => new Promise((ok, no) => a.decodeAudioData(b, ok, no))) // callback form: old Safari has no promise
+      .then((b) => URL.createObjectURL(new Blob([b], { type: 'audio/mpeg' })))
       .catch(() => {
-        buffers.delete(url); // offline or missing: try again next time
+        files.delete(url); // offline or missing: try again next time
         return null;
       });
-    buffers.set(url, p);
+    files.set(url, p);
   }
   return p;
 }
@@ -58,8 +58,7 @@ export function say(moment, { index, onTalk, wait = 0 } = {}) {
   line?.stop();
   turn++;
   const n = COUNTS[moment];
-  const a = S.sound && n ? audioContext() : null;
-  if (!a) return quiet();
+  if (!S.sound || !n) return quiet();
   let num;
   if (index != null) num = Math.max(1, Math.min(n, (index | 0) + 1));
   else if (ready[moment]) num = ready[moment];
@@ -72,7 +71,7 @@ export function say(moment, { index, onTalk, wait = 0 } = {}) {
     if (over) return;
     over = true;
     clearTimeout(timer);
-    if (src) try { src.stop(); } catch { /* not started */ }
+    src?.stop();
     if (talk) onTalk?.(false);
     if (line === me) line = null;
     done(ok);
@@ -81,28 +80,26 @@ export function say(moment, { index, onTalk, wait = 0 } = {}) {
   line = me;
   const from = Date.now();
 
-  const start = (buf) => {
+  const start = (url) => {
     if (over) return;
     if (!S.sound) return finish(false);
-    if (a.state !== 'running') a.resume().catch(() => {});
-    src = a.createBufferSource();
-    src.buffer = buf;
-    const g = a.createGain();
-    g.gain.value = VOLUME;
-    src.connect(g).connect(a.destination);
-    src.onended = () => finish(true);
-    src.start();
-    talk = true;
-    onTalk?.(true);
-    // a suspended context never fires onended: give up a little after the line's length
-    timer = setTimeout(() => finish(true), buf.duration * 1000 + 700);
+    src = playUrl('voice', url, {
+      volume: VOLUME,
+      onStart: () => {
+        talk = true;
+        onTalk?.(true);
+      },
+      onEnd: finish,
+    });
+    // the element ends by itself; this only frees her if the browser never says so
+    timer = setTimeout(() => finish(true), 15000);
   };
-  load(file(moment, num), a).then((buf) => {
+  load(file(moment, num)).then((url) => {
     if (over) return;
-    if (!buf) return finish(false);
+    if (!url) return finish(false);
     const left = wait - (Date.now() - from);
-    if (left > 0) timer = setTimeout(() => start(buf), left);
-    else start(buf);
+    if (left > 0) timer = setTimeout(() => start(url), left);
+    else start(url);
   });
   return me;
 }
@@ -133,12 +130,11 @@ export function hush() {
 
 /** Optional: picks and downloads the next line of these moments ahead, so say() starts at once. */
 export function warm(...moments) {
-  const a = S.sound ? audioContext() : null;
-  if (!a) return;
+  if (!S.sound) return;
   for (const m of moments) {
     if (!COUNTS[m]) continue;
     ready[m] ||= pick(m);
-    load(file(m, ready[m]), a);
+    load(file(m, ready[m]));
   }
 }
 
