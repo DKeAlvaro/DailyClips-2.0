@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-// Read-only check of a live deployment: the page loads, the video starts on a tap and the first
-// "your turn" shows up. Nothing is recorded, so it is safe to run against production.
+// Read-only check of a live deployment: the page loads, the video starts on a tap, the first
+// "your turn" shows up and one take is scored (a stand-in recogniser repeats the line; the web level
+// scores in the browser and an unfinished clip is never uploaded). Safe to run against production.
 //   node tests/smoke.mjs --base https://llmers.es [--shots dir]
 import fs from 'node:fs';
 import path from 'node:path';
@@ -13,6 +14,23 @@ fs.mkdirSync(shots, { recursive: true });
 const { context, page } = await launch({ headless: true });
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
+const voice = [];
+page.on('request', (r) => { if (r.url().includes('/assets/voice1/')) voice.push(r.url().replace(/^.*\//, '')); });
+await context.addInitScript(() => {
+  class FakeSR {
+    start() {
+      setTimeout(() => this.onstart && this.onstart(), 30);
+      this._t = setTimeout(() => {
+        const r = [{ transcript: window.__said || '' }];
+        r.isFinal = true;
+        this.onresult && this.onresult({ results: [r] });
+      }, 900);
+    }
+    stop() { setTimeout(() => this.onend && this.onend(), 30); }
+    abort() { clearTimeout(this._t); }
+  }
+  window.SpeechRecognition = window.webkitSpeechRecognition = FakeSR;
+});
 const t0 = Date.now();
 const at = () => ((Date.now() - t0) / 1000).toFixed(1) + ' s';
 await page.goto(base + '/', { waitUntil: 'domcontentloaded' });
@@ -29,6 +47,13 @@ await page.screenshot({ path: path.join(shots, 'playing.png') });
 await page.waitForSelector('.deck.prompt', { timeout: 25000 });
 console.log('first "your turn"', at());
 await page.screenshot({ path: path.join(shots, 'prompt.png') });
+await page.evaluate(() => { window.__said = document.querySelector('.phrase').innerText; });
+await page.tap('#mic');
+await page.waitForSelector('.deck.feedback', { timeout: 15000 });
+await page.waitForTimeout(1200);
+console.log('first take', at(), '| score', await page.evaluate(() => document.querySelector('.fbscore').textContent),
+  '| mascot', await page.evaluate(() => document.querySelector('.deck .mascot')?.dataset.mood || 'none'), '| voice', voice.join(' ') || 'none');
+await page.screenshot({ path: path.join(shots, 'feedback.png') });
 await page.tap('#menu');
 await page.waitForSelector('.sheet.in', { timeout: 5000 });
 await page.waitForTimeout(400);
