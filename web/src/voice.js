@@ -2,12 +2,21 @@
 //   say('take_great', { onTalk: (on) => talking(el, on) })  ->  { promise, stop }
 import { S } from './store.js';
 import { playUrl } from './fx.js';
+import { lang } from './i18n.js';
 
 /** Lines per moment, in the order of tools/voice/lines.json (tools/voice/check.mjs keeps them equal). */
 export const COUNTS = {
   take_perfect: 12, take_great: 12, take_good: 10, take_close: 12, take_low: 10, take_better: 8, take_silent: 4,
   result_high: 8, result_mid: 6, result_low: 5, result_best: 4, streak: 6, bye: 3,
 };
+
+/** Her tips after a take, by issue (see sounds.js): two lines each, in English (fix_) and in Spanish (es_fix_). */
+export const FIXES = ['th_d', 'th', 'v', 'z', 'h', 'sh', 'j', 'ng', 'r', 'er', 'w', 'y', 'i', 'ee', 'ae', 'uh', 'schwa', 'ah', 'aw',
+  'oo', 'u', 'oh', 'ay', 'flap', 'end', 'es', 'vowel', 'cons', 'missed'];
+for (const k of FIXES) COUNTS['fix_' + k] = COUNTS['es_fix_' + k] = 2;
+
+/** The moment of her tip for an issue, in the language of the interface (null when she has none). */
+export const fixMoment = (issue) => (FIXES.includes(issue) ? (lang() === 'es' ? 'es_fix_' : 'fix_') + issue : null);
 
 const file = (m, n) => `/assets/voice1/${m}-${n}.mp3`;
 const VOLUME = 0.9;

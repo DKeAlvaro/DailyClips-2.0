@@ -6,6 +6,7 @@ import { webSupported } from './tier-web.js';
 import { device, deviceReady, deviceSupported, proActive } from './tiers.js';
 import { proCard } from './billing.js';
 import { ctx } from './ctx.js';
+import { soundRows } from './sounds.js';
 
 extend({
   es: {
@@ -134,8 +135,7 @@ export function soundsPanel(list, openLevels) {
       e[1] += n;
     }
   }
-  const rows = Object.entries(totals).filter(([, v]) => v[1] >= 3).map(([p, v]) => ({ p, avg: Math.round(v[0] / v[1]), n: v[1] }))
-    .sort((a, b) => a.avg - b.avg).slice(0, 6);
+  const rows = soundRows(totals).filter((r) => r.n >= 3).sort((a, b) => a.avg - b.avg).slice(0, 6);
   const locked = !rows.length && !Object.keys(totals).length && !deviceReady() && !proActive();
   if (locked) {
     // the web level cannot tell sounds apart: one row that leads to the levels that can
@@ -148,7 +148,8 @@ export function soundsPanel(list, openLevels) {
   }
   for (const r of rows) {
     const cls = r.avg >= 80 ? 'good' : r.avg >= 50 ? 'mid' : 'bad';
-    panel.append(h('div.snd', h('div.p', `/${r.p}/`),
+    // the sound as the letters that spell it and a word that has it: "th this"
+    panel.append(h('div.snd', h('div.p', h('b', r.letters), h('i', r.ex)),
       h('div.track', h('i', { style: { width: r.avg + '%', background: `var(--${cls})` } })), h('div.v', String(r.avg))));
   }
   return panel;

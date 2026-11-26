@@ -259,9 +259,55 @@ function publicResult(pub) {
   return r ? { id: r.pub, n: r.n, score: r.score, phrases: JSON.parse(r.phrases), tier: r.tier, name: displayName(r) } : null;
 }
 
+// ---------------------------------------------------------------- words nobody gets understood
+
+// A word the browser's recogniser misses for nearly everyone who said the rest of the line right is the
+// recogniser's fault (a name, slang, a word it spells its own way), not theirs: it stops counting for
+// everyone, the same way the clip's own rare words do. Only takes that missed at most one word are counted.
+const CROWD_MIN = 3, CROWD_SHARE = 0.6;
+const crowdCache = new Map(); // clip n -> { line index: [word indices] }
+
+function crowdRare(n) {
+  if (crowdCache.has(n)) return crowdCache.get(n);
+  const seen = {}, out = {};
+  const rows = q('SELECT line, word, n FROM word_checks WHERE clip_n = ?').all(n);
+  for (const r of rows) seen[r.line] = (seen[r.line] || 0) + r.n;
+  for (const r of rows) if (r.word >= 0 && r.n >= CROWD_MIN && r.n / seen[r.line] >= CROWD_SHARE) (out[r.line] ||= []).push(r.word);
+  crowdCache.set(n, out);
+  return out;
+}
+
+/** The clip as players get it: the words nobody gets understood join each line's rare words. */
+function served(clip) {
+  const crowd = clip && crowdRare(clip.n);
+  if (!crowd || !Object.keys(crowd).length) return clip;
+  let line = -1;
+  const phrases = clip.phrases.map((p) => {
+    if (p.skip) return p;
+    const add = crowd[++line];
+    return add ? { ...p, rare: [...new Set([...(p.rare || []), ...add])].sort((a, b) => a - b) } : p;
+  });
+  return { ...clip, phrases };
+}
+
+function saveWordChecks(clip, lines, list) {
+  if (!Array.isArray(list)) return;
+  const done = new Set();
+  const before = JSON.stringify(crowdRare(clip.n));
+  for (const it of list.slice(0, lines)) {
+    if (!Array.isArray(it) || !int(it[0], 0, lines - 1) || !int(it[1], -1, 200) || done.has(it[0])) continue;
+    done.add(it[0]);
+    q(`INSERT INTO word_checks (clip_n, line, word, n) VALUES (?, ?, ?, 1)
+       ON CONFLICT(clip_n, line, word) DO UPDATE SET n = n + 1`).run(clip.n, it[0], it[1]);
+  }
+  crowdCache.delete(clip.n);
+  const after = crowdRare(clip.n);
+  if (JSON.stringify(after) !== before) log('words nobody gets understood, clip', clip.n, JSON.stringify(after));
+}
+
 function renderPage(n, url) {
   const todayN = clips.ensureTodaySync();
-  const clip = clips.get(n || todayN);
+  const clip = served(clips.get(n || todayN));
   if (!clip) return null;
   const lang = url.searchParams.get('l') === 'en' ? 'en' : 'es';
   const vs = publicResult(url.searchParams.get('vs'));
@@ -394,7 +440,7 @@ const route = (method, pattern, fn) => routes.push({ method, pattern, fn });
 route('GET', /^\/api\/health$/, () => ({ ok: true, day: dayOf(), today: clips.ensureTodaySync() }));
 
 route('GET', /^\/api\/clip\/(\d+)$/, (req, m) => {
-  const clip = clips.get(Number(m[1]));
+  const clip = served(clips.get(Number(m[1])));
   if (!clip) throw bad(404, 'no_clip');
   return { clip, count: clipStats(clip.n).count };
 });
@@ -447,6 +493,7 @@ route('POST', /^\/api\/results$/, async (req) => {
   if (r.changes) {
     statsCache.delete('clip:' + clip.n);
     statsCache.delete('week:' + weekStart(today));
+    if (tier === 'web') saveWordChecks(clip, count, b.words);
   }
   return { saved: !!r.changes, ...profile(user), stats: clipStats(clip.n) };
 });

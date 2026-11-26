@@ -4,17 +4,18 @@
 //   pro  phoneme-level, scored on our server with a larger model (one-time payment)
 import { S, save } from './store.js';
 import { listenWeb, webSupported } from './tier-web.js';
+import { untrusted } from './words.js';
 import { extend, t } from './i18n.js';
 import { toast } from './dom.js';
 
 extend({
   es: {
     dev_slow: 'A este móvil le cuesta el modelo: vuelvo al nivel web. Lo puedes reactivar en Cuenta.',
-    tip_rare: '<b>{w}</b> · el reconocedor del navegador casi nunca entiende esta palabra: no cuenta para la nota',
+    tip_rare: '<b>{w}</b> · al reconocedor del navegador le cuesta esta palabra aunque la digas bien: no cuenta para la nota',
   },
   en: {
     dev_slow: 'This phone struggles with the model: back to the web level. You can switch it on again in Account.',
-    tip_rare: "<b>{w}</b> · the browser's recogniser hardly ever gets this word: it doesn't count towards your score",
+    tip_rare: "<b>{w}</b> · the browser's recogniser struggles with this word even when it's said well: it doesn't count towards your score",
   },
 });
 
@@ -60,7 +61,7 @@ export function warm(unit) {
 export function listen(unit, hooks) {
   const tier = activeTier(unit);
   if (tier === 'web') {
-    const h = listenWeb(unit.text, { ...hooks, rare: unit.rare });
+    const h = listenWeb(unit.text, { ...hooks, rare: untrusted(unit.text, unit.rare) });
     return { stop: h.stop, tier, promise: h.promise.then((r) => ({ ...r, tier })) };
   }
   let inner = null, stopped = false;

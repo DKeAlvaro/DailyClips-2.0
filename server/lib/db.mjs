@@ -59,6 +59,13 @@ CREATE TABLE IF NOT EXISTS stripe_events (
   id TEXT PRIMARY KEY,
   at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS word_checks (  -- web-level takes that missed at most one word of a line
+  clip_n INTEGER NOT NULL,
+  line INTEGER NOT NULL,               -- index among the lines that are scored
+  word INTEGER NOT NULL,               -- word missed, -1 when the whole line was understood
+  n INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (clip_n, line, word)
+);
 CREATE TABLE IF NOT EXISTS reports (
   clip_n INTEGER NOT NULL,
   code TEXT NOT NULL,

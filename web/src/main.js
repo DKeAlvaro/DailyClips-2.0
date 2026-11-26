@@ -11,7 +11,8 @@ import { showResult, hideResult } from './result.js';
 import { openStats, openRank, openArchive, openAccount, openBlocked, closeSheet } from './sheets.js';
 import { proReturn } from './billing.js';
 import { mascot, setMood, speak } from './girl.js';
-import { hush, warm as warmVoice, takeMoment, moodFor } from './voice.js';
+import { hush, warm as warmVoice, takeMoment, moodFor, fixMoment } from './voice.js';
+import { explain } from './sounds.js';
 
 const app = $('#app'), stage = $('#stage'), deck = $('#deck'), top = $('#top');
 const poster = $('#poster'), backdrop = $('#backdrop'), tapcatch = $('#tapcatch'), ytMount = $('#yt');
@@ -377,15 +378,20 @@ async function startListening() {
     S.session = { n: ctx.clip.n, best: s.best, takes: s.takes };
     save();
   }
-  // her reaction: the chime and the buzz land with the score, her line follows as the number settles
+  // her reaction: the chime and the buzz land with the score, her line follows as the number settles.
+  // When something came out wrong she takes turns: a reaction, then what to fix, then a reaction...
   const moment = takeMoment({ score: out.score, previous: s.prev[i] });
+  const worst = worstOf(out), issue = worst && explainOf(u, out, worst).key;
+  const lone = out.words.filter((w) => w.c !== 'g' && w.s != null).length === 1; // "I missed one word" only when it was one
+  const fix = issue && (issue !== 'missed' || lone) && moment !== 'take_better' && s.said !== 'fix' ? fixMoment(issue) : null;
+  s.said = fix ? 'fix' : 'reaction';
   s.prev[i] = out.score;
   s.mood = moodFor(moment);
   renderTop();
   renderCard();
   scoreFx(out.score);
   // once she is done, the next reactions are fetched ahead so later lines answer at once
-  speak(s.girl, moment, { wait: 380 }).promise.then(() => warmVoice('take_perfect', 'take_great', 'take_good', 'take_close', 'take_low'));
+  speak(s.girl, fix || moment, { wait: 380 }).promise.then(() => warmVoice('take_perfect', 'take_great', 'take_good', 'take_close', 'take_low'));
 }
 
 function next() {
@@ -404,7 +410,9 @@ function finish() {
   if (fresh) {
     const today = currentDay();
     const sounds = soundTotals(s.detail);
-    S.results[clip.n] = { n: clip.n, score, phrases, tier: s.detail.find(Boolean)?.tier || activeTier(), day: today, at: now(), onDay: clip.day === today, synced: false, ...(sounds ? { sounds } : {}) };
+    const words = wordChecks(s.detail);
+    S.results[clip.n] = { n: clip.n, score, phrases, tier: s.detail.find(Boolean)?.tier || activeTier(), day: today, at: now(), onDay: clip.day === today, synced: false,
+      ...(sounds ? { sounds } : {}), ...(words.length ? { words } : {}) };
     S.session = null;
     save();
   }
@@ -442,6 +450,20 @@ function soundTotals(details) {
     }
   }
   return Object.keys(out).length ? out : null;
+}
+
+/**
+ * [line, word missed or -1] for every web-level line that missed at most one word: the server finds the
+ * words the recogniser misses for nearly everyone and stops counting them (see served() in server/api.mjs).
+ */
+function wordChecks(details) {
+  const out = [];
+  details.forEach((d, i) => {
+    if (!d || d.tier !== 'web' || !d.words) return;
+    const missed = d.words.flatMap((w, j) => (w.s != null && w.c !== 'g' ? [j] : []));
+    if (missed.length <= 1) out.push([i, missed.length ? missed[0] : -1]);
+  });
+  return out;
 }
 
 // ------------------------------------------------------------------ the phrase card
@@ -486,7 +508,7 @@ function renderCard(msg) {
       h('div.btns',
         h('button.btn', { disabled: !s.practice && left <= 0, onclick: () => playUnit(i, { replay: true }) }, icon('replay'), t('retry'), dots()),
         h('button.btn.' + (res.score >= 50 || left <= 0 ? 'pri' : 'wht'), { onclick: next, id: 'next' }, t(last ? 'finish' : 'next'), icon('next'))));
-    const worst = res.words.filter((w) => w.c !== 'g' && w.s != null).sort((a, b) => a.s - b.s)[0];
+    const worst = worstOf(res);
     if (worst) showTip(tip, worst, phrase.querySelectorAll('.w')[res.words.indexOf(worst)]);
     else tip.innerHTML = t('all_good');
     if (!S.seen.mic) {
@@ -504,6 +526,12 @@ function girl(s, mood) {
   return s.girl;
 }
 
+/** The word of a take to talk about: the worst one that counts (null when everything came out well). */
+const worstOf = (res) => res.words.filter((w) => w.c !== 'g' && w.s != null).sort((a, b) => a.s - b.s)[0] || null;
+
+/** explain() for word `w` of take `res` of phrase `u`. */
+const explainOf = (u, res, w) => explain(w, w.ph ? w.ph.map((x) => x.p) : u.ph && u.ph[res.words.indexOf(w)]);
+
 /** The tip under the phrase for word `w`; its span `el` gets the plate that ties the two together. */
 function showTip(tip, w, el) {
   if (el) {
@@ -512,15 +540,11 @@ function showTip(tip, w, el) {
   }
   tip.dataset.c = w.c;
   const word = w.t.replace(/^[^\w']+|[^\w']+$/g, '');
-  let html = w.c === 'g' ? t('tip_good', { w: word }) : w.c === 'c' && w.heard ? t('tip_close', { w: word, h: w.heard }) : w.heard ? t('tip_miss_h', { w: word, h: w.heard }) : t('tip_miss', { w: word });
-  if (w.rare) html = t('tip_rare', { w: word });
-  if (w.ph) {
-    html = `<b>${word}</b> · ${w.s}`;
-    html += '<br><span class="ph">' + w.ph.map((p) => `<span class="${band(p.s == null ? 100 : p.s)}">${p.p}</span>`).join('') + '</span>';
-    const off = w.ph.filter((p) => p.h && p.h !== p.p && p.s != null && p.s < 50).sort((a, b) => a.s - b.s)[0];
-    if (off) html += '<br>' + t('tip_heard', { h: off.h, p: off.p });
-  }
-  tip.innerHTML = html;
+  if (w.rare) return void (tip.innerHTML = t('tip_rare', { w: word }));
+  // the word with its letters in colour (the sound that failed underlined), what was heard, and how to say it
+  const s = ctx.session, x = explainOf(s.units[s.i], s.last, w);
+  const said = w.c === 'g' ? t('tip_good', { w: word }) : w.ph ? '' : w.heard ? t(w.c === 'c' ? 'tip_close' : 'tip_miss_h', { w: word, h: w.heard }) : t('tip_miss', { w: word });
+  tip.innerHTML = (said ? said.replace(/^<b>[^<]*<\/b>/, x.head) : x.head) + (x.body ? '<br>' + x.body : '');
 }
 
 // ------------------------------------------------------------------ go

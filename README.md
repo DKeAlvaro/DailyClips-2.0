@@ -56,6 +56,8 @@ node tests/smoke.mjs --base https://llmers.es                                  #
 node tests/pro.mjs   --base <staging> --secret <...> --stripe-key sk_test_...  # pay, score, refund (Stripe test mode)
 node tests/load.mjs  --base <staging> --results 300 --reads 300 --seconds 60   # never against production
 node tests/ref/device.mjs [--throttle 4]                                       # on-device level: sanity + timing
+node tools/check-spell.mjs [--all]                                             # letters <-> sounds alignment over the queue
+node tools/voice/check.mjs                                                     # voice lines, COUNTS and MP3s agree
 python tests/ref/onnx_check.py MODEL.onnx scorer/vocab.json NAME               # a phoneme model on the reference audios
 python tests/ref/calibrate.py NAME                                             # its three points on the common scale
 ```

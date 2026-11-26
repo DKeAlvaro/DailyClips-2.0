@@ -159,9 +159,8 @@ svg { display: block; }
 .wordtip[data-c=g] > b:first-child { color: var(--good); } .wordtip[data-c=c] > b:first-child { color: var(--mid); } .wordtip[data-c=m] > b:first-child { color: var(--bad); }
 .keep { margin: 6px 0 0; font-size: 15px; color: rgba(255, 255, 255, 0.72); }
 .keep b { color: #fff; }
-.ph { display: inline-flex; gap: 3px; margin-top: 6px; flex-wrap: wrap; }
-.ph span { font: 600 15px/1 "Segoe UI", "Noto Sans", "Lucida Sans Unicode", sans-serif; padding: 5px 6px; border-radius: 5px; background: rgba(255, 255, 255, 0.1); }
-.ph .g { color: var(--good); } .ph .c { color: var(--mid); } .ph .m { color: var(--bad); }
+.wordtip b.g, .wordtip .sp .g { color: var(--good); } .wordtip b.c, .wordtip .sp .c { color: var(--mid); } .wordtip b.m, .wordtip .sp .m { color: var(--bad); }
+.wordtip .sp .f { text-decoration: underline 2px; text-underline-offset: 4px; }
 .btns { display: flex; gap: 10px; margin-top: 14px; }
 .btn { flex: 1; height: 56px; border-radius: 14px; font: 700 17px/1 var(--disp); letter-spacing: -0.01em; display: inline-flex; align-items: center; justify-content: center; gap: 8px; color: #fff; border: 1.5px solid rgba(255, 255, 255, 0.5); transition: transform 0.12s var(--ease); text-decoration: none; }
 .btn:active { transform: scale(0.97); }
@@ -261,9 +260,11 @@ svg { display: block; }
 .chart { width: 100%; height: 120px; display: block; overflow: visible; }
 .empty { color: var(--mut); font-size: 15px; padding: 4px 0; text-wrap: balance; }
 .empty b { color: var(--ink); display: block; font: 700 19px/1.2 var(--disp); margin-bottom: 6px; letter-spacing: -0.01em; }
-.snd { display: grid; grid-template-columns: 54px 1fr 34px; gap: 10px; align-items: center; padding: 9px 0; border-top: 1px solid var(--line); }
+.snd { display: grid; grid-template-columns: 96px 1fr 34px; gap: 10px; align-items: center; padding: 9px 0; border-top: 1px solid var(--line); }
 .snd:first-of-type { border-top: 0; }
-.snd .p { font: 650 19px/1 "Segoe UI", "Noto Sans", sans-serif; }
+.snd .p { font-size: 15px; line-height: 1.1; white-space: nowrap; }
+.snd .p b { font: 800 19px/1 var(--disp); margin-right: 5px; }
+.snd .p i { color: rgba(255, 255, 255, 0.7); }
 .snd .track { height: 9px; background: var(--card2); overflow: hidden; border-radius: 5px; }
 .snd .track i { display: block; height: 100%; border-radius: 5px; }
 .snd .v { font: 800 16px/1 var(--disp); text-align: right; font-variant-numeric: tabular-nums; }

@@ -32,7 +32,7 @@ export function syncResults() {
     let last = null;
     for (const r of resultList().filter((x) => !x.synced)) {
       try {
-        last = await api('/api/results', { method: 'POST', body: { n: r.n, score: r.score, phrases: r.phrases, tier: r.tier, sounds: r.sounds } });
+        last = await api('/api/results', { method: 'POST', body: { n: r.n, score: r.score, phrases: r.phrases, tier: r.tier, sounds: r.sounds, words: r.words } });
         r.synced = true;
         save();
       } catch (e) {

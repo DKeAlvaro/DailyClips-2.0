@@ -6,6 +6,7 @@ const SAME = [
   ['our', 'hour'], ['whos', 'whose'], ['its'], ['ok', 'okay'], ['im', 'am'], ['whether', 'weather'],
   ['hi', 'high'], ['new', 'knew'], ['would', 'wood'], ['wait', 'weight'], ['made', 'maid'], ['through', 'threw'],
   ['meet', 'meat'], ['son', 'sun'], ['week', 'weak'], ['peace', 'piece'], ['whole', 'hole'], ['ill', 'isle'],
+  ['lil', 'little'], ['ol', 'old'], ['nothin', 'nothing'], ['somethin', 'something'], ['goin', 'going'], ['doin', 'doing'],
 ];
 const CLASS = new Map();
 SAME.forEach((g, i) => g.forEach((w) => CLASS.set(w, i)));
@@ -127,6 +128,19 @@ function simSplit(e, run) {
 function simRare(e, run) {
   const a = soundKey(e), b = soundKey(run.join(''));
   return a.length >= 2 && b.length >= 2 && near(a, b) >= 0.6 ? 1 : 0;
+}
+
+/**
+ * Indices of the words of `text` a recogniser cannot be trusted with: the clip's rare words plus names
+ * (a capital letter inside a sentence: "Lil Sebastian", "Dwight"), which recognisers spell their own way.
+ */
+export function untrusted(text, rare) {
+  const out = new Set(rare || []);
+  const words = String(text).split(/\s+/).filter(Boolean);
+  words.forEach((w, i) => {
+    if (i && /^[^\w]*[A-Z][a-z]/.test(w) && !/[.!?:]["”’')]*$/.test(words[i - 1])) out.add(i);
+  });
+  return [...out];
 }
 
 const RUN = 3; // how many words may stand for one
