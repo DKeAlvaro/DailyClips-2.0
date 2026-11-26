@@ -54,9 +54,13 @@ const ADJ = ['Brave', 'Calm', 'Clever', 'Bold', 'Bright', 'Swift', 'Lucky', 'Mel
   'Jolly', 'Keen', 'Noble', 'Proud', 'Quick', 'Sharp', 'Steady', 'Zesty', 'Cosmic', 'Golden', 'Silver', 'Daring'];
 const ANIMAL = ['Otter', 'Falcon', 'Panda', 'Fox', 'Koala', 'Lynx', 'Owl', 'Heron', 'Wolf', 'Tiger', 'Dolphin', 'Raven',
   'Badger', 'Gecko', 'Moose', 'Puffin', 'Robin', 'Seal', 'Swan', 'Yak', 'Bison', 'Crane', 'Finch', 'Hare'];
-export function randomAlias() {
-  const b = crypto.randomBytes(3);
+/** Alias from three bytes: the same bytes give the same alias, so invented players keep theirs. */
+export function aliasFrom(b) {
   return `${ADJ[b[0] % ADJ.length]} ${ANIMAL[b[1] % ANIMAL.length]} ${10 + (b[2] % 90)}`;
+}
+
+export function randomAlias() {
+  return aliasFrom(crypto.randomBytes(3));
 }
 
 /** First name only, trimmed to something safe to show in a public ranking. */

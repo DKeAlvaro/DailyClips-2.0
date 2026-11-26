@@ -17,7 +17,8 @@ CREATE TABLE IF NOT EXISTS users (
   stripe_sub TEXT,
   pro_status TEXT,                     -- stripe subscription status (active, past_due, canceled...)
   pro_until INTEGER,                   -- current period end (ms)
-  pro_cancel INTEGER NOT NULL DEFAULT 0 -- cancel_at_period_end
+  pro_cancel INTEGER NOT NULL DEFAULT 0, -- cancel_at_period_end
+  seed INTEGER NOT NULL DEFAULT 0      -- an invented player (lib/seed.mjs), marked for the admin view
 );
 CREATE TABLE IF NOT EXISTS devices (
   token_hash TEXT PRIMARY KEY,
@@ -75,11 +76,18 @@ CREATE TABLE IF NOT EXISTS reports (
 );
 `;
 
+/** Columns added after the first release: CREATE TABLE IF NOT EXISTS leaves an old file without them. */
+const ADDED = [['users', 'seed', 'INTEGER NOT NULL DEFAULT 0']];
+
 export function openDb(dir) {
   fs.mkdirSync(dir, { recursive: true });
   const db = new DatabaseSync(path.join(dir, 'dailyclips.db'));
   db.exec('PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 4000;');
   db.exec(SCHEMA);
+  for (const [table, col, type] of ADDED) {
+    const has = db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === col);
+    if (!has) db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${type}`);
+  }
   const cache = new Map();
   /** Prepared statements are cached by SQL text. */
   const q = (sql) => {

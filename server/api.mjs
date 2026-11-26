@@ -11,6 +11,7 @@ import { createClips, embedOk } from './lib/clips.mjs';
 import { verifyGoogleIdToken } from './lib/google.mjs';
 import { createBilling } from './lib/billing.mjs';
 import { createPro } from './lib/pro.mjs';
+import { createSeed } from './lib/seed.mjs';
 import {
   dayOf, nextDayAt, addDays, weekStart, sha256, randomId, randomAlias, firstName, escapeHtml, safeEqual, RateLimiter,
 } from './lib/util.mjs';
@@ -36,6 +37,7 @@ const cfg = {
   googleClientId: env.GOOGLE_CLIENT_ID || '',
   testSecret: env.DC_TEST_AUTH || '', // only set on staging/local: enables /api/auth/test
   adminSecret: env.DC_ADMIN || '',
+  adminEmails: String(env.DC_ADMIN_EMAILS || '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean),
   rateScale: Number(env.DC_RATE_SCALE || 1),
 };
 
@@ -97,6 +99,8 @@ function auth(req, { create = false } = {}) {
 
 const isPro = (u) => !!u && ['active', 'trialing'].includes(u.pro_status) && (u.pro_until || 0) > Date.now() - 86400e3;
 const displayName = (u) => (u.show_name && u.name ? firstName(u.name) : '') || u.alias;
+/** His own accounts: the only ones that see which players are invented (lib/seed.mjs). */
+const isAdmin = (u) => !!u && !!u.email && cfg.adminEmails.includes(u.email.toLowerCase());
 
 function streakOf(days, today) {
   const set = new Set(days);
@@ -125,7 +129,7 @@ function profile(user) {
   return {
     user: {
       id: user.pub, alias: user.alias, name: user.name ? firstName(user.name) : null, email: user.email || null,
-      google: !!user.google_sub, showName: !!user.show_name, shown: displayName(user),
+      google: !!user.google_sub, showName: !!user.show_name, shown: displayName(user), admin: isAdmin(user),
       pro: { active: isPro(user), until: user.pro_until || null, cancel: !!user.pro_cancel, status: user.pro_status || null },
     },
     streak: streakOf(rows.filter((r) => r.on_day).map((r) => r.day), dayOf()),
@@ -188,7 +192,7 @@ function cached(key, ttl, compute) {
 
 function clipStats(n) {
   return cached('clip:' + n, STATS_TTL, () => {
-    const rows = q(`SELECT r.score, r.phrases, r.tier, r.created_at, u.pub, u.name, u.show_name, u.alias
+    const rows = q(`SELECT r.score, r.phrases, r.tier, r.created_at, u.pub, u.name, u.show_name, u.alias, u.seed
                     FROM results r JOIN users u ON u.id = r.user_id WHERE r.clip_n = ?
                     ORDER BY r.score DESC, r.created_at ASC`).all(n);
     const scores = {};
@@ -201,22 +205,39 @@ function clipStats(n) {
       if (!phr) phr = new Array(p.length).fill(0);
       if (p.length === phr.length) p.forEach((v, i) => { phr[i] += v; });
     }
+    const seeded = rows.filter((r) => r.seed).length;
     return {
       n, count: rows.length, avg: rows.length ? Math.round(sum / rows.length) : null, scores,
       phrases: phr ? phr.map((v) => Math.round(v / rows.length)) : [],
-      top: rows.slice(0, 100).map((r) => ({ u: r.pub, name: displayName(r), score: r.score, tier: r.tier })),
+      top: rows.slice(0, 100).map((r) => ({ u: r.pub, name: displayName(r), score: r.score, tier: r.tier, s: !!r.seed })),
+      seeded, real: rows.length - seeded,
     };
   });
+}
+
+/**
+ * A board as the caller may see it. Invented players (lib/seed.mjs) are ordinary rows: their marker
+ * only reaches his own account, so nobody else can tell which player is not a person.
+ */
+function boardFor(user, board) {
+  if (isAdmin(user)) return { ...board, top: board.top.map(({ s: seeded, ...r }) => ({ ...r, seed: seeded })) };
+  const { seeded, real, ...rest } = board;
+  return { ...rest, top: rest.top.map(({ s: _s, ...r }) => r) };
 }
 
 function weekStats() {
   const from = weekStart(dayOf());
   return cached('week:' + from, STATS_TTL, () => {
-    const rows = q(`SELECT u.pub, u.name, u.show_name, u.alias, SUM(r.score) total, COUNT(*) days, MIN(r.created_at) first
+    const rows = q(`SELECT u.pub, u.name, u.show_name, u.alias, u.seed, SUM(r.score) total, COUNT(*) days, MIN(r.created_at) first
                     FROM results r JOIN users u ON u.id = r.user_id JOIN clips c ON c.n = r.clip_n
                     WHERE c.day >= ? AND c.day <= ? GROUP BY u.id ORDER BY total DESC, first ASC LIMIT 200`).all(from, addDays(from, 6));
-    const people = q(`SELECT COUNT(DISTINCT r.user_id) c FROM results r JOIN clips c ON c.n = r.clip_n WHERE c.day >= ? AND c.day <= ?`).get(from, addDays(from, 6)).c;
-    return { from, to: addDays(from, 6), count: people, top: rows.map((r) => ({ u: r.pub, name: displayName(r), score: r.total, days: r.days })) };
+    const people = q(`SELECT COUNT(DISTINCT r.user_id) c, COUNT(DISTINCT CASE WHEN u.seed = 1 THEN r.user_id END) seeded
+                      FROM results r JOIN users u ON u.id = r.user_id JOIN clips c ON c.n = r.clip_n
+                      WHERE c.day >= ? AND c.day <= ?`).get(from, addDays(from, 6));
+    return {
+      from, to: addDays(from, 6), count: people.c, seeded: people.seeded,
+      top: rows.map((r) => ({ u: r.pub, name: displayName(r), score: r.total, days: r.days, s: !!r.seed })),
+    };
   });
 }
 
@@ -431,6 +452,7 @@ const int = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
 
 const billing = createBilling({ cfg, env, q, log, bad, isPro, allow, onChange: () => statsCache.clear() });
 const pro = createPro({ env, q, log, bad, isPro, clips, allow });
+const seed = createSeed({ q, tx, log });
 
 // ---------------------------------------------------------------- routes
 
@@ -449,10 +471,10 @@ route('GET', /^\/api\/archive$/, () => ({ today: clips.ensureTodaySync(), clips:
 
 route('GET', /^\/api\/stats\/(\d+)$/, (req, m) => {
   if (!clips.get(Number(m[1]))) throw bad(404, 'no_clip');
-  return clipStats(Number(m[1]));
+  return boardFor(auth(req), clipStats(Number(m[1])));
 });
 
-route('GET', /^\/api\/rank\/week$/, () => weekStats());
+route('GET', /^\/api\/rank\/week$/, (req) => boardFor(auth(req), weekStats()));
 
 route('GET', /^\/api\/r\/([a-z0-9]{6,14})$/, (req, m) => {
   const r = publicResult(m[1]);
@@ -495,7 +517,7 @@ route('POST', /^\/api\/results$/, async (req) => {
     statsCache.delete('week:' + weekStart(today));
     if (tier === 'web') saveWordChecks(clip, count, b.words);
   }
-  return { saved: !!r.changes, ...profile(user), stats: clipStats(clip.n) };
+  return { saved: !!r.changes, ...profile(user), stats: boardFor(user, clipStats(clip.n)) };
 });
 
 route('POST', /^\/api\/auth\/google$/, async (req) => {
@@ -570,6 +592,35 @@ route('POST', /^\/internal\/publish$/, async (req) => {
   const n = await clips.ensureToday(embedOk);
   const up = clips.upcoming();
   return { today: n, day: dayOf(), left: up.left };
+});
+
+// Invented players (lib/seed.mjs), from the cron: `?live=1` fills the day as it goes.
+// `?today=<n>` sets how many play today, `?players=<n>` how many accounts exist, `?days=<n>` how far
+// back it backfills. GET reports real against invented; /remove takes them all out again.
+const adminOnly = (req) => {
+  if (!cfg.adminSecret || !safeEqual(req.headers['x-admin'] || '', cfg.adminSecret)) throw bad(404, 'not_found');
+};
+
+route('POST', /^\/internal\/seed$/, (req, m, url) => {
+  adminOnly(req);
+  const num = (k) => (url.searchParams.has(k) ? Number(url.searchParams.get(k)) : null);
+  const out = seed.run({
+    live: url.searchParams.get('live') === '1', today: num('today'), days: num('days') || 90, players: num('players') || 60,
+  });
+  statsCache.clear();
+  return { ...out, ...seed.status() };
+});
+
+route('GET', /^\/internal\/seed$/, (req) => {
+  adminOnly(req);
+  return seed.status();
+});
+
+route('POST', /^\/internal\/seed\/remove$/, (req) => {
+  adminOnly(req);
+  const out = seed.remove();
+  statsCache.clear();
+  return out;
 });
 
 billing.routes(route, { auth, readJson, readBody, profile });

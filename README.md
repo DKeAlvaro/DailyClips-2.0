@@ -41,12 +41,30 @@ node tests/e2e.mjs --secret <DC_TEST_AUTH>
 
 Configuration comes from the environment or a local `.env` (never committed):
 
-- API: `DC_PORT`, `DC_DATA`, `DC_BASE_URL`, `GOOGLE_CLIENT_ID`, `DC_ADMIN`, `DC_TEST_AUTH` (staging only)
+- API: `DC_PORT`, `DC_DATA`, `DC_BASE_URL`, `GOOGLE_CLIENT_ID`, `DC_ADMIN`, `DC_ADMIN_EMAILS` (which accounts see the invented players), `DC_TEST_AUTH` (staging only)
 - Pro: `DC_SCORER_URL`, `DC_SCORER_KEY`; billing: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID`
 - Scorer: `SCORER_MODEL`, `SCORER_KEY`, `SCORER_PORT`, `SCORER_QUEUE`
 
 Without the Stripe settings there is no Pro card; without the scorer settings Pro falls back to the level
 the device has.
+
+## Invented players
+
+A board that a handful of people have played reads as a dead product, so a few dozen made-up accounts
+(`server/lib/seed.mjs`) play along: ordinary users and ordinary results, marked with `users.seed = 1`.
+The day fills up as it goes instead of jumping at midnight, and the scores follow a plausible curve
+(most people in the 60s and 70s, an occasional 100).
+
+Only his own accounts are told which rows are invented: list them in `DC_ADMIN_EMAILS` and the ranking
+sports a small `seeded` / `sembrada` chip and a line with the real count. Everyone else gets the same
+JSON without the markers.
+
+- `POST /internal/seed?live=1` (`X-Admin: $DC_ADMIN`) adds the takes due so far today. Cron:
+  `/opt/dailyclips/bin/seed` (copy `deploy/seed.sh` there), every 30 minutes.
+- `?today=40&players=70` sets how many play today and how many accounts exist, `?days=30` how far
+  back it backfills; `GET /internal/seed` reports real against invented.
+- `POST /internal/seed/remove` takes every invented player out again and the boards are real.
+- Off the server, on a local database: `node tools/seed-players.mjs [--live|--status|--remove|--dry]`.
 
 ## Tests
 
@@ -57,6 +75,7 @@ node tests/pro.mjs   --base <staging> --secret <...> --stripe-key sk_test_...  #
 node tests/load.mjs  --base <staging> --results 300 --reads 300 --seconds 60   # never against production
 node tests/ref/device.mjs [--throttle 4]                                       # on-device level: sanity + timing
 node tools/check-spell.mjs [--all]                                             # letters <-> sounds alignment over the queue
+node tests/seed.mjs                                                            # invented players, no browser
 node tools/voice/check.mjs                                                     # voice lines, COUNTS and MP3s agree
 python tests/ref/onnx_check.py MODEL.onnx scorer/vocab.json NAME               # a phoneme model on the reference audios
 python tests/ref/calibrate.py NAME                                             # its three points on the common scale

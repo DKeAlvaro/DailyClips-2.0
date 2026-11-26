@@ -159,12 +159,16 @@ function statsTab(body) {
 
 function rankList(rows, meId) {
   // equal scores share a place (1, 1, 3), the same way the "you're #n" line counts
+  // his own account also sees which players are invented (the server only marks them for him)
+  const admin = !!(S.user && S.user.admin);
   let pos = 0;
   return h('ol.list', rows.map((r, i) => {
     if (!i || r.score !== rows[i - 1].score) pos = i + 1;
     return h('li.rk' + (r.u === meId ? '.me' : ''),
       h('span.pos' + (pos === 1 ? '.first' : ''), String(pos)),
-      h('span.nm', r.name + (r.u === meId ? ` (${t('you').toLowerCase()})` : ''), r.days ? h('small', t(r.days === 1 ? 'clips_1' : 'clips_n', { n: r.days })) : null),
+      h('span.nm', r.name + (r.u === meId ? ` (${t('you').toLowerCase()})` : ''),
+        admin && r.seed ? h('small.sd', t('seeded_chip')) : null,
+        r.days ? h('small', t(r.days === 1 ? 'clips_1' : 'clips_n', { n: r.days })) : null),
       h('span.sc', String(r.score)));
   }));
 }
@@ -184,7 +188,9 @@ async function rankTab(body) {
       return body.append(h('div.empty', t('net_fail')));
     }
     if (!wk.top.length) return body.append(h('div.empty', { html: t('week_empty') }));
-    return body.append(rankList(wk.top, meId));
+    body.append(rankList(wk.top, meId));
+    if (wk.seeded != null) body.append(h('p.note', t('seeded_note', { n: wk.seeded, real: wk.count - wk.seeded })));
+    return;
   }
   const n = ctx.clip.n, mine = S.results[n];
   let stats;
@@ -200,6 +206,7 @@ async function rankTab(body) {
     body.append(h('p.lead', { html: total > 1 ? t('among', { pos: st.pos, n: total }) : t('among_1') }));
   } else body.append(h('p.lead', t('rank_join')));
   body.append(rankList(stats.top, meId));
+  if (stats.seeded != null) body.append(h('p.note', t('seeded_note', { n: stats.seeded, real: stats.real })));
   if (stats.count < 3) body.append(h('div.cta', h('button.btn.sm', { onclick: shareClip }, icon('share'), t('share_clip'))));
 }
 

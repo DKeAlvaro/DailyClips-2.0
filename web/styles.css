@@ -277,6 +277,8 @@ svg { display: block; }
 .rk .pos { font: 700 16px/1 var(--disp); color: var(--dim); font-variant-numeric: tabular-nums; }
 .rk .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 16px/1.1 var(--disp); }
 .rk .nm small { color: var(--mut); font: 500 14px/1 var(--body); margin-left: 8px; }
+/* only the admin sees it: which people on the board are invented */
+.rk .nm small.sd { color: var(--dim); font-size: 12px; }
 .rk .sc { font: 800 18px/1 var(--disp); font-variant-numeric: tabular-nums; }
 .rk.me { border-top-color: transparent; background: rgba(185, 243, 63, 0.13); border-radius: 12px; padding-left: 10px; padding-right: 10px; margin: 0 -4px; }
 .rk.me + .rk { border-top-color: transparent; }
