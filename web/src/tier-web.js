@@ -1,5 +1,6 @@
 // Web tier: the browser's own speech recogniser (Web Speech API). Nothing to download.
 import { compare } from './words.js';
+import { micStart, micEnd } from './fx.js';
 
 const SR = () => window.SpeechRecognition || window.webkitSpeechRecognition;
 export const webSupported = () => !!SR();
@@ -23,12 +24,15 @@ export function listenWeb(text, { maxMs = 12000, onInterim, onStart, onSpeech, r
         rec.onresult = rec.onend = rec.onerror = null;
         rec.abort();
       } catch { /* already stopped */ }
+      micEnd();
       resolve(out);
     };
     const wrap = () => (best ? { ok: true, ...best } : { ok: false, why: fail || 'nospeech' });
+    micStart();
     try {
       rec = new (SR())();
     } catch {
+      micEnd();
       return resolve({ ok: false, why: 'unsupported' });
     }
     rec.lang = 'en-US';

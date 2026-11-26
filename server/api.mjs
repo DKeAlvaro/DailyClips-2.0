@@ -555,6 +555,15 @@ route('POST', /^\/api\/report$/, async (req) => {
   return { ok: true };
 });
 
+route('POST', /^\/api\/sound$/, async (req) => {
+  // a phone could not play an interface sound (web/src/fx.js): logged, nothing stored
+  if (!allow('sound:' + req.ip, 20, 3600e3)) return { ok: true };
+  const b = await readJson(req, 2048);
+  const clean = (v, n) => String(v || '').replace(/[^\w .,;:()/+-]/g, '').slice(0, n);
+  log('sound', clean(b.what, 60), b.ios ? 'ios' : '', clean(b.session, 20), '|', clean(b.ua, 160));
+  return { ok: true };
+});
+
 route('POST', /^\/internal\/publish$/, async (req) => {
   // called by the daily cron from localhost
   if (!cfg.adminSecret || !safeEqual(req.headers['x-admin'] || '', cfg.adminSecret)) throw bad(404, 'not_found');

@@ -1,5 +1,5 @@
 // Microphone capture for the phoneme levels: raw PCM, trimmed to the speech and resampled to 16 kHz.
-import { audioContext } from './fx.js';
+import { audioContext, micStart, micEnd } from './fx.js';
 
 const RATE = 16000;
 
@@ -32,6 +32,7 @@ export function resample(x, from, to = RATE) {
 export function record({ maxMs = 12000, onLevel, onStart } = {}) {
   let stopNow = () => {};
   const ac = audioContext(); // created inside the tap that started this, as iOS requires
+  micStart();
   const promise = (async () => {
     if (!ac || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return { ok: false, why: 'unsupported' };
     let stream;
@@ -91,7 +92,7 @@ export function record({ maxMs = 12000, onLevel, onStart } = {}) {
       sink.connect(ac.destination);
       if (onStart) onStart();
     });
-  })();
+  })().finally(micEnd);
   return { promise, stop: () => stopNow() };
 }
 

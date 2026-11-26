@@ -33,6 +33,49 @@ function wavUrl(x) {
   return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
 }
 
+// The microphone and the speaker share one audio session on iOS. While Safari records, and for a
+// moment after, the session stays in record mode and anything played comes out ducked to almost
+// nothing (the chime and her line after a take were never heard on iPhone). So the page says which
+// session it wants (Audio Session API, Safari 16.4+) and sounds wait for the mic to settle.
+const SETTLE = isIOS() ? 700 : 0; // ms after the mic closes
+const LATER = { voice: 380 }; // her line keeps coming after the chime when both wait
+let micOpen = false, micClosedAt = -1e9;
+
+function session(type) {
+  if (!isIOS()) return;
+  try {
+    if (navigator.audioSession && navigator.audioSession.type !== type) navigator.audioSession.type = type;
+  } catch { /* not supported */ }
+}
+
+/** Call right before the microphone opens, inside the tap that opens it. */
+export function micStart() {
+  micOpen = true;
+  session('play-and-record');
+}
+
+/** Call as soon as the microphone is closed. */
+export function micEnd() {
+  if (!micOpen) return;
+  micOpen = false;
+  micClosedAt = performance.now();
+  // a running capture context keeps iOS in record mode; record() resumes it inside the next tap
+  if (isIOS() && ac && ac.state === 'running') ac.suspend().catch(() => {});
+  session('playback');
+}
+
+// What went wrong with a sound, sent once in a while: a phone that stays silent cannot tell us otherwise.
+let reports = 0;
+function report(what) {
+  if (reports >= 6) return;
+  reports++;
+  try {
+    navigator.sendBeacon('/api/sound', JSON.stringify({
+      what, ios: isIOS(), session: navigator.audioSession?.type || '', ua: (navigator.userAgent || '').slice(0, 160),
+    }));
+  } catch { /* no beacons */ }
+}
+
 const lanes = {}; // name -> the <audio> element that plays that kind of sound
 const lane = (name) => (lanes[name] ||= Object.assign(new Audio(), { preload: 'auto' }));
 
@@ -43,10 +86,11 @@ const lane = (name) => (lanes[name] ||= Object.assign(new Audio(), { preload: 'a
  */
 export function playUrl(name, url, { volume = 1, onStart, onEnd } = {}) {
   const e = lane(name);
-  let over = false;
+  let over = false, wait = 0;
   const me = {
     stop() {
       if (over) return;
+      clearTimeout(wait);
       try { e.pause(); } catch { /* nothing playing */ }
       done(false);
     },
@@ -57,13 +101,26 @@ export function playUrl(name, url, { volume = 1, onStart, onEnd } = {}) {
     if (e.cur === me) e.onended = e.onerror = e.cur = null;
     onEnd?.(ok);
   };
+  const go = () => {
+    if (over) return;
+    const settle = SETTLE && SETTLE + (LATER[name] || 0);
+    const left = micOpen ? settle : micClosedAt + settle - performance.now();
+    if (left > 0) return (wait = setTimeout(go, Math.max(50, left)));
+    e.onended = () => done(true);
+    e.onerror = () => {
+      report(name + ' media error ' + (e.error?.code || ''));
+      done(false);
+    };
+    e.src = url;
+    e.volume = volume;
+    e.play().then(() => { if (!over) onStart?.(); }, (err) => {
+      if (!over) report(name + ' refused ' + (err?.name || err));
+      done(false);
+    });
+  };
   e.cur?.stop();
   e.cur = me;
-  e.onended = () => done(true);
-  e.onerror = () => done(false);
-  e.src = url;
-  e.volume = volume;
-  e.play().then(() => { if (!over) onStart?.(); }, () => done(false));
+  go();
   return me;
 }
 
@@ -76,7 +133,7 @@ export function unlockSound() {
   const clip = wavUrl(new Float32Array(RATE / 20));
   Promise.all(['sfx', 'voice'].map((n) => {
     const e = lane(n);
-    if (e.cur) return true; // busy with a real sound: it was started inside a tap already
+    if (e.cur && !e.paused) return true; // busy with a real sound: it was started already (a sound still waiting for the mic is not)
     e.src = clip;
     e.volume = 0;
     return e.play().then(() => { if (!e.cur) e.pause(); return true; }, () => false);
