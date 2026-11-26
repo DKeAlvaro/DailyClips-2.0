@@ -50,9 +50,10 @@ function load(url, a) {
 /**
  * Says one line of a moment. index: 0-based line of that moment (else a random one that was not
  * said lately). Resolves true when it played to the end, false when silent, stopped or failed.
+ * wait: ms from now before she may start (the file is fetched meanwhile; hush() cancels the wait).
  * The first argument may also be an item of resultMoments(): { moment, index }.
  */
-export function say(moment, { index, onTalk } = {}) {
+export function say(moment, { index, onTalk, wait = 0 } = {}) {
   if (moment && typeof moment === 'object') ({ moment, index = index } = moment);
   line?.stop();
   turn++;
@@ -78,10 +79,11 @@ export function say(moment, { index, onTalk } = {}) {
   };
   const me = { promise, stop: () => finish(false) };
   line = me;
+  const from = Date.now();
 
-  load(file(moment, num), a).then((buf) => {
+  const start = (buf) => {
     if (over) return;
-    if (!buf || !S.sound) return finish(false);
+    if (!S.sound) return finish(false);
     if (a.state !== 'running') a.resume().catch(() => {});
     src = a.createBufferSource();
     src.buffer = buf;
@@ -94,17 +96,24 @@ export function say(moment, { index, onTalk } = {}) {
     onTalk?.(true);
     // a suspended context never fires onended: give up a little after the line's length
     timer = setTimeout(() => finish(true), buf.duration * 1000 + 700);
+  };
+  load(file(moment, num), a).then((buf) => {
+    if (over) return;
+    if (!buf) return finish(false);
+    const left = wait - (Date.now() - from);
+    if (left > 0) timer = setTimeout(() => start(buf), left);
+    else start(buf);
   });
   return me;
 }
 
-/** Says several lines one after the other (e.g. resultMoments()). Same options as say(). */
+/** Says several lines one after the other (e.g. resultMoments()). Same options as say(); wait only delays the first. */
 export function sayAll(list, opts = {}) {
   let cur = null, stopped = false;
   const promise = (async () => {
-    for (const it of list) {
+    for (const [i, it] of list.entries()) {
       if (stopped) return false;
-      cur = say(it, opts);
+      cur = say(it, i ? { ...opts, wait: 0 } : opts);
       const t = turn;
       await cur.promise;
       if (t !== turn) return false;

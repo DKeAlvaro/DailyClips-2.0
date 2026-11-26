@@ -25,19 +25,33 @@ function swap(el, m) {
   });
 }
 
-/** Changes her mood in place. */
+/** Changes her mood in place; a small hop marks the change. */
 export function setMood(el, mood) {
   if (!el || !MOODS.includes(mood) || el.dataset.mood === mood) return;
+  const wasTalking = !!el._t;
   clearInterval(el._t);
+  el._t = 0;
   el.dataset.mood = mood;
   swap(el, mood);
+  el.classList.remove('hop');
+  void el.offsetWidth;
+  el.classList.add('hop');
+  clearTimeout(el._hop);
+  el._hop = setTimeout(() => el.classList.remove('hop'), 900);
+  if (wasTalking) talking(el, true);
 }
 
-/** Mouth moves while a voice line plays: pass as say()'s onTalk, e.g. (on) => talking(el, on). */
+/**
+ * While a voice line plays: from the plain face the mouth flaps (talk / idle frames); any other
+ * mood keeps its picture, which already has the expression, and bobs (.talking in mascot.css).
+ */
 export function talking(el, on) {
   if (!el) return;
   clearInterval(el._t);
+  el._t = 0;
+  el.classList.toggle('talking', !!on && el.dataset.mood !== 'idle');
   if (!on) return swap(el, el.dataset.mood);
+  if (el.dataset.mood !== 'idle') return;
   let open = 0;
   el._t = setInterval(() => swap(el, (open ^= 1) ? 'talk' : 'idle'), 160);
 }

@@ -17,6 +17,7 @@ const fresh = () => ({
   results: {}, // clip n -> { id?, n, score, phrases, tier, day, at, onDay, synced, sounds? }
   session: null, // an unfinished clip: { n, best: [], takes: [] }
   seen: {}, // one-off hints already shown
+  mascot: 'a', // which look of the mascot: a (drawn) | b (pictures), set with ?mascot=
 });
 
 let state = fresh();

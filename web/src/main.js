@@ -10,6 +10,8 @@ import { ctx, MAX_TAKES, now, currentDay, isIOS } from './ctx.js';
 import { showResult, hideResult } from './result.js';
 import { openStats, openRank, openArchive, openAccount, openBlocked, closeSheet } from './sheets.js';
 import { proReturn } from './billing.js';
+import { mascot, setMood, speak } from './girl.js';
+import { hush, warm as warmVoice, takeMoment, moodFor } from './voice.js';
 
 const app = $('#app'), stage = $('#stage'), deck = $('#deck'), top = $('#top');
 const poster = $('#poster'), backdrop = $('#backdrop'), tapcatch = $('#tapcatch'), ytMount = $('#yt');
@@ -36,6 +38,7 @@ window.addEventListener('popstate', () => {
 });
 document.addEventListener('visibilitychange', () => {
   if (document.hidden && ctx.session && ctx.session.handle) ctx.session.handle.stop();
+  if (document.hidden) hush();
   if (!document.hidden) syncResults();
 });
 window.addEventListener('online', () => syncResults());
@@ -244,6 +247,7 @@ function beginSession() {
   const s = (ctx.session = {
     units, i: 0, state: 'playing', practice: !!ctx.practiceArmed || !!S.results[clip.n],
     best: units.map(() => null), detail: units.map(() => null), takes: units.map(() => 0), last: null, handle: null, showing: null,
+    prev: units.map(() => null), girl: null, mood: 'idle', // the mascot: last take's score per line, her element, her face
   });
   ctx.practiceArmed = false;
   if (!s.practice && S.session && S.session.n === clip.n && S.session.best.length === units.length) {
@@ -262,6 +266,7 @@ function beginSession() {
 
 async function playUnit(i, { replay = false, slow = false, first = false } = {}) {
   const s = ctx.session, p = ctx.player, u = s.units[i];
+  hush(); // she never talks over the clip
   s.i = i;
   s.state = 'playing';
   s.showing = null;
@@ -331,6 +336,7 @@ async function startListening() {
   const s = ctx.session;
   if (!s || (s.state !== 'prompt' && s.state !== 'feedback')) return;
   if (!canListen()) return openBlocked();
+  hush(); // nor into a recording
   sfx.unlock();
   buzz(12);
   const u = s.units[s.i];
@@ -354,7 +360,10 @@ async function startListening() {
   if (!out.ok) {
     if (out.why === 'unsupported') openBlocked();
     const msg = { denied: 'mic_denied', nomic: 'mic_denied', network: 'net_fail', unsupported: 'blocked_title', model: 'model_fail' }[out.why];
-    return prompt(t(msg || (String(out.why).startsWith('pro_') ? 'pro_busy' : 'nospeech')));
+    const key = msg || (String(out.why).startsWith('pro_') ? 'pro_busy' : 'nospeech');
+    prompt(t(key));
+    if (key === 'nospeech') speak(s.girl, takeMoment({ score: 0, heard: false }), { wait: 200 }); // "a bit louder, please!"
+    return;
   }
   const i = s.i;
   s.takes[i]++;
@@ -368,9 +377,15 @@ async function startListening() {
     S.session = { n: ctx.clip.n, best: s.best, takes: s.takes };
     save();
   }
+  // her reaction: the chime and the buzz land with the score, her line follows as the number settles
+  const moment = takeMoment({ score: out.score, previous: s.prev[i] });
+  s.prev[i] = out.score;
+  s.mood = moodFor(moment);
   renderTop();
   renderCard();
   scoreFx(out.score);
+  // once she is done, the next reactions are fetched ahead so later lines answer at once
+  speak(s.girl, moment, { wait: 380 }).promise.then(() => warmVoice('take_perfect', 'take_great', 'take_good', 'take_close', 'take_low'));
 }
 
 function next() {
@@ -457,14 +472,16 @@ function renderCard(msg) {
         h('button.side', { onclick: () => playUnit(i, { replay: true, slow: true }), 'aria-label': t('slow') }, '0.75×'),
         dots()));
   } else if (mode === 'listening' || mode === 'scoring') {
-    // the red mic says it already; the words are only spelled out the first time, like "your turn"
+    // the red mic says it already; the words are only spelled out the first time, like "your turn".
+    // She takes the replay button's place and listens with you.
     kids.push(!S.seen.mic ? h('p.hint', t(mode === 'listening' ? 'listening' : 'scoring')) : null,
       h('div.ctrl', { style: { 'justify-content': 'center' } },
+        h('div.girl', girl(s, 'listen')),
         h('button.mic', { onclick: () => s.handle && s.handle.stop(), 'aria-label': 'stop', id: 'mic' }, icon('stop'))));
   } else if (mode === 'feedback') {
     const last = i === s.units.length - 1;
     kids.push(
-      h('div.fb', h('div.fbscore.' + band(res.score) + '-t', String(res.score)),
+      h('div.fb', h('div.fbscore.' + band(res.score) + '-t', String(res.score)), girl(s, s.mood),
         h('div.fbtxt', tip, s.best[i] > res.score ? h('p.keep', { html: t('best_is', { n: s.best[i] }) }) : null)),
       h('div.btns',
         h('button.btn', { disabled: !s.practice && left <= 0, onclick: () => playUnit(i, { replay: true }) }, icon('replay'), t('retry'), dots()),
@@ -478,6 +495,13 @@ function renderCard(msg) {
     }
   }
   clear(deck, h('div.card', kids));
+}
+
+/** The mascot of this session: one element that moves from card to card and changes face. */
+function girl(s, mood) {
+  if (!s.girl) s.girl = mascot(mood, { size: 60 });
+  else setMood(s.girl, mood);
+  return s.girl;
 }
 
 /** The tip under the phrase for word `w`; its span `el` gets the plate that ties the two together. */

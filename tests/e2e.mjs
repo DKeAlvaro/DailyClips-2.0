@@ -44,6 +44,8 @@ ok(jobs.every((j) => fs.existsSync(j.out)), 'reference audio synthesised', (tts.
 const a = await launch({ headless });
 const errors = [];
 a.page.on('pageerror', (e) => errors.push(e.message));
+const herFiles = []; // the mascot's voice lines and pictures: none before the first take
+a.page.on('request', (r) => { if (/\/assets\/(voice1|mascot1)\//.test(r.url())) herFiles.push(r.url()); });
 const nav0 = Date.now();
 await a.page.goto(base + '/', { waitUntil: 'domcontentloaded' });
 await a.page.waitForSelector('.app.ready', { timeout: 15000 });
@@ -63,6 +65,7 @@ for (let i = 0; i < units.length; i++) {
   if (i === 0) {
     console.log(`${stamp()} INFO  first "your turn" ${((Date.now() - nav0) / 1000).toFixed(1)} s after opening the URL (the first line lasts ${(units[0].t1 - (clip.start ?? units[0].t0)).toFixed(1)} s)`);
     await a.page.screenshot({ path: path.join(shots, '2-prompt.png') });
+    ok(herFiles.length === 0, 'nothing of the mascot downloaded before the first take', herFiles.join(' '));
   }
   speak(jobs[i].out);
   await a.page.tap('#mic');
@@ -75,6 +78,8 @@ for (let i = 0; i < units.length; i++) {
   if (i === 0) {
     await a.page.waitForTimeout(600);
     await a.page.screenshot({ path: path.join(shots, '4-feedback.png') });
+    ok(await a.page.evaluate(() => !!document.querySelector('.deck.feedback .fb .mascot')), 'the mascot is on the feedback card');
+    ok(herFiles.some((u) => u.includes('/assets/voice1/')), 'she answers the first take with a voice line', herFiles.map((u) => u.replace(/^.*\//, '')).join(' '));
   }
   await a.page.tap('#next');
 }
@@ -85,6 +90,7 @@ const shown = Number(await a.page.evaluate(() => document.querySelector('.big').
 const mean = Math.round(scores.reduce((x, y) => x + y, 0) / scores.length);
 ok(shown === mean, 'final score is the mean of the lines', `${scores.join(', ')} -> ${shown}`);
 ok(shown >= 80, 'native TTS scores high on the web level', String(shown));
+ok(await a.page.evaluate(() => !!document.querySelector('#result .mascot')), 'the mascot is on the result screen');
 ok((await a.page.evaluate(() => document.querySelector('#streakchip').textContent.trim())) === '1', 'streak is 1 after the first clip');
 const me1 = await a.page.evaluate(async () => {
   const S = JSON.parse(localStorage.getItem('dailyclips.v2'));

@@ -142,6 +142,9 @@ svg { display: block; }
 @keyframes breathe { 50% { transform: scale(1.32); opacity: 0.18; } }
 .scoring .mic { background: rgba(255, 255, 255, 0.16); color: transparent; pointer-events: none; box-shadow: none; }
 .scoring .mic::before { content: ""; position: absolute; width: 32px; height: 32px; border-radius: 50%; border: 3px solid rgba(255, 255, 255, 0.25); border-top-color: #fff; animation: spin 0.8s linear infinite; }
+/* the mascot listens where the replay button was */
+.ctrl .girl { position: absolute; left: 0; top: 50%; width: 62px; margin-top: -30px; display: flex; justify-content: center; }
+.listening .ctrl .girl { animation: fadeup 0.3s var(--ease) both; }
 
 /* the take's score: the number itself, in its colour; a good one glows */
 .fb { display: flex; align-items: center; gap: 16px; margin-top: 14px; min-height: 64px; }
@@ -150,6 +153,7 @@ svg { display: block; }
 @keyframes land { 0% { transform: translateY(10px) scale(0.7); opacity: 0; } 60% { transform: scale(1.08); opacity: 1; } 100% { transform: none; } }
 .g-t { color: var(--good); } .c-t { color: var(--mid); } .m-t { color: var(--bad); }
 .fbtxt { flex: 1; min-width: 0; }
+.fb .mascot { margin: 0 -2px; }
 .wordtip { font-size: 16px; line-height: 1.35; color: rgba(255, 255, 255, 0.9); }
 .wordtip b { font-weight: 700; color: #fff; }
 .wordtip[data-c=g] > b:first-child { color: var(--good); } .wordtip[data-c=c] > b:first-child { color: var(--mid); } .wordtip[data-c=m] > b:first-child { color: var(--bad); }
@@ -171,6 +175,11 @@ svg { display: block; }
 .result { position: absolute; inset: calc(var(--sat) + 62px) 0 0; z-index: 6; overflow-y: auto; overscroll-behavior: contain; padding: 10px 20px calc(var(--sab) + 30px); -webkit-overflow-scrolling: touch; }
 .scorecard { background: var(--card); border: 1px solid var(--line); border-radius: 22px; padding: 18px 20px 0; margin-top: 4px; animation: rise 0.5s var(--ease) both; }
 @keyframes rise { from { transform: translateY(32px); opacity: 0; } }
+/* the mascot peeks over the card from behind it, and pops up once the card has landed */
+.peek { position: relative; margin-top: 70px; }
+.peek .scorecard { position: relative; z-index: 1; margin-top: 0; }
+.pk { position: absolute; right: 16px; top: -75px; animation: peekup 0.45s cubic-bezier(0.3, 1.4, 0.5, 1) both 0.55s; }
+@keyframes peekup { 0% { transform: translateY(84px); opacity: 0; } 1% { opacity: 1; } }
 .ttitle { font: 700 18px/1.2 var(--disp); color: var(--mut); margin: 0; text-wrap: balance; }
 .tscore { display: flex; align-items: flex-end; gap: 16px; margin: 12px 0 0; }
 .big { flex: none; font: 900 min(124px, 31vw)/0.8 var(--disp); letter-spacing: -0.05em; font-variant-numeric: tabular-nums; }

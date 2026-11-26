@@ -42,7 +42,8 @@ const walk = (file) => {
 walk(entry);
 const preload = [...eager].map((f) => `<link rel="modulepreload" href="/assets/${path.basename(f)}">`).join('');
 
-const css = (await transform(fs.readFileSync(path.join(src, 'styles.css'), 'utf8'), { loader: 'css', minify: true })).code
+const sheets = ['styles.css', 'mascot.css'].map((f) => fs.readFileSync(path.join(src, f), 'utf8')).join('\n');
+const css = (await transform(sheets, { loader: 'css', minify: true })).code
   .replaceAll('__FONT__', fontName);
 
 for (const page of ['index.html']) {

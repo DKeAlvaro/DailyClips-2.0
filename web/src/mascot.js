@@ -74,6 +74,9 @@ export function setMood(el, mood) {
   el.classList.remove('hop');
   void el.getBoundingClientRect();
   el.classList.add('hop');
+  // gone once played, so moving her to another card later does not replay it
+  clearTimeout(el._hop);
+  el._hop = setTimeout(() => el.classList.remove('hop'), 900);
 }
 
 /** Mouth moves while a voice line plays: pass as say()'s onTalk, e.g. (on) => talking(el, on). */

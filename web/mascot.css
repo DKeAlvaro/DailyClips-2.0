@@ -27,11 +27,17 @@
 .mascot.hop .mb { animation: m-hop 0.45s cubic-bezier(0.2, 0.8, 0.2, 1); }
 .mascot.hop .pt { animation: m-swish 0.8s cubic-bezier(0.2, 0.8, 0.2, 1); }
 
+/* the image look (web/src/mascot-img.js): the whole picture hops on a change and bobs while she talks */
+img.mascot { -webkit-user-select: none; user-select: none; }
+img.mascot.hop { animation: m-hop 0.45s cubic-bezier(0.2, 0.8, 0.2, 1); }
+img.mascot.talking { transform-origin: 50% 100%; animation: m-bob 0.42s ease-in-out infinite alternate; }
+
 @keyframes m-blink { 0%, 95%, 100% { transform: none; } 97% { transform: scaleY(0.1); } }
+@keyframes m-bob { from { transform: none; } to { transform: translateY(-3%) scale(1.03, 0.98); } }
 @keyframes m-hop { 35% { transform: translateY(-5px); } 70% { transform: translateY(1px); } }
 @keyframes m-swish { 25% { transform: rotate(-9deg); } 60% { transform: rotate(5deg); } }
 @keyframes m-talk { 0%, 100% { transform: scaleY(0.35); } 18% { transform: scaleY(1); } 34% { transform: scaleY(0.5); } 52% { transform: scaleY(0.95); } 70% { transform: scaleY(0.3); } 85% { transform: scaleY(0.8); } }
 
 @media (prefers-reduced-motion: reduce) {
-  .mascot *, .mascot.talking .mt { animation: none !important; transition: none !important; }
+  .mascot, .mascot *, .mascot.talking .mt { animation: none !important; transition: none !important; }
 }

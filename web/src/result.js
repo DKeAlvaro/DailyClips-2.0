@@ -9,13 +9,22 @@ import { band } from './words.js';
 import { shareResult } from './share.js';
 import { googleButton, oneTap, loginAvailable, signedIn } from './auth.js';
 import { openRank, openArchive } from './sheets.js';
+import { mascot, setMood, speak } from './girl.js';
+import { hush, resultMoments, moodFor } from './voice.js';
 
 let el = null, timer = 0;
+let girl = null, girlClip = 0, girlAt = 0; // the mascot over the card, kept while the same result is redrawn
 
-export function hideResult() {
+function drop() {
   clearInterval(timer);
   if (el) el.remove();
   el = null;
+}
+
+/** Leaving the result screen: she stops talking too. */
+export function hideResult() {
+  drop();
+  hush();
 }
 
 const verdict = (s) => t(s >= 90 ? 'v90' : s >= 80 ? 'v80' : s >= 65 ? 'v65' : s >= 45 ? 'v45' : 'v0');
@@ -135,15 +144,42 @@ function duelSection(rec) {
   return h('div.sec', h('h3', head), h('p.sub.vs', h('span.a', `${t('you')} ${rec.score}`), ' · ', h('span.b', `${vs.name} ${vs.score}`)), grid);
 }
 
+/**
+ * What she says about this result: [{ moment, index? }]. best = the best score of the results before
+ * this one; the streak only counts when this clip is what just moved it (a fresh result done on its day).
+ */
+function moments(rec, { fresh, practiceScore }) {
+  if (practiceScore != null) return resultMoments({ score: practiceScore }); // nothing was saved: no record, no streak
+  let best = null;
+  for (const r of Object.values(S.results)) if (r !== rec && (r.at || 0) < (rec.at || Infinity) && (best == null || r.score > best)) best = r.score;
+  const raised = fresh && rec.onDay && !Object.values(S.results).some((r) => r !== rec && r.onDay && r.day === rec.day);
+  return resultMoments({ score: rec.score, best, streak: raised ? streak(currentDay()).current : 0 });
+}
+
+/** She peeks over the score card; on a redraw of the same result she stays as she was. */
+function peeker(rec, list, { keepScroll }) {
+  const again = keepScroll && girl && girlClip === rec.n;
+  if (!again) {
+    girl = mascot(moodFor(list[0]), { size: 96 });
+    girlClip = rec.n;
+    girlAt = performance.now();
+  } else setMood(girl, moodFor(list[0]));
+  // a redraw restarts CSS animations: keep what is left of her entrance, or none once she is up
+  const gone = performance.now() - girlAt;
+  return h('div.pk', { style: gone > 550 ? { animation: 'none' } : { 'animation-delay': Math.round(550 - gone) + 'ms' } }, girl);
+}
+
 export function showResult({ fresh = false, practiceScore = null, keepScroll = false } = {}) {
   const clip = ctx.clip, rec = S.results[clip.n];
   if (!rec) return;
   const scroll = el ? el.scrollTop : 0;
-  hideResult();
+  drop();
   const tk = scorecard(rec, { fresh, practiceScore });
   const stand = h('div.sec');
+  const said = moments(rec, { fresh, practiceScore });
+  const face = peeker(rec, said, { keepScroll });
   el = h('div.result', { id: 'result' },
-    tk.node,
+    h('div.peek', face, tk.node),
     h('div.cta', h('button.btn.pri', { onclick: shareResult, id: 'share' }, icon('share'), t('share'))),
     stand,
     duelSection(rec),
@@ -160,6 +196,8 @@ export function showResult({ fresh = false, practiceScore = null, keepScroll = f
     el.querySelectorAll('.verdict, .rseg i').forEach((n) => { n.style.animation = 'none'; });
   }
   if (fresh) countUp(tk.big, rec.score, 1100);
+  // she speaks right after a run (after the closing chime); a result opened again later only shows her face
+  if (fresh || practiceScore != null) speak(girl, said, { wait: 950 });
   standingSection(stand);
   if (!ctx.stats[clip.n]) {
     api('/api/stats/' + clip.n).then((s) => {
