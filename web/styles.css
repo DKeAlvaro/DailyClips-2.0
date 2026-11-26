@@ -160,6 +160,7 @@ svg { display: block; }
 .keep { margin: 6px 0 0; font-size: 15px; color: rgba(255, 255, 255, 0.72); }
 .keep b { color: #fff; }
 .wordtip b.g, .wordtip .sp .g { color: var(--good); } .wordtip b.c, .wordtip .sp .c { color: var(--mid); } .wordtip b.m, .wordtip .sp .m { color: var(--bad); }
+.wordtip .sp .x { color: #fff; }
 .wordtip .sp .f { text-decoration: underline 2px; text-underline-offset: 4px; }
 .btns { display: flex; gap: 10px; margin-top: 14px; }
 .btn { flex: 1; height: 56px; border-radius: 14px; font: 700 17px/1 var(--disp); letter-spacing: -0.01em; display: inline-flex; align-items: center; justify-content: center; gap: 8px; color: #fff; border: 1.5px solid rgba(255, 255, 255, 0.5); transition: transform 0.12s var(--ease); text-decoration: none; }

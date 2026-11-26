@@ -544,7 +544,7 @@ function showTip(tip, w, el) {
   // the word with its letters in colour (the sound that failed underlined), what was heard, and how to say it
   const s = ctx.session, x = explainOf(s.units[s.i], s.last, w);
   const said = w.c === 'g' ? t('tip_good', { w: word }) : w.ph ? '' : w.heard ? t(w.c === 'c' ? 'tip_close' : 'tip_miss_h', { w: word, h: w.heard }) : t('tip_miss', { w: word });
-  tip.innerHTML = (said ? said.replace(/^<b>[^<]*<\/b>/, x.head) : x.head) + (x.body ? '<br>' + x.body : '');
+  tip.innerHTML = (said ? said.replace(/^<b>[^<]*<\/b>/, () => x.head) : x.head) + (x.body ? '<br>' + x.body : '');
 }
 
 // ------------------------------------------------------------------ go

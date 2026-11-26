@@ -121,7 +121,10 @@ function looks(h) {
   return VOWEL.has(h) ? { x: s[2] } : { l: s[1] };
 }
 
-/** Index of the first sound of `word` that the recogniser heard differently ("this" heard as "dis": the th). */
+/**
+ * The first sound of `word` the recogniser heard differently, as { k: sound index, h: the letters heard in its
+ * place, '' when nothing was } ("this" heard as "dis": the th, heard as "d"). null when there is nothing to point at.
+ */
 function diffAt(word, heard, chunks) {
   const at = []; // letter of the word -> sound index
   for (const c of chunks) for (const ch of c.t) if (/[a-z]/i.test(ch)) at.push(c.p.length ? c.p[0] : null);
@@ -131,11 +134,22 @@ function diffAt(word, heard, chunks) {
   // d[i][j] = edits between a[i..] and b[j..]; walk from the start to the first edit
   const d = Array.from({ length: n + 1 }, (_, i) => Array.from({ length: m + 1 }, (_, j) => (i === n ? m - j : j === m ? n - i : 0)));
   for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) d[i][j] = Math.min(d[i + 1][j] + 1, d[i][j + 1] + 1, d[i + 1][j + 1] + (a[i] === b[j] ? 0 : 1));
-  if (d[0][0] > 2 && 1 - d[0][0] / Math.max(n, m) < 0.4) return null; // a different word altogether: nothing to point at
+  if (d[0][0] > 2 && 1 - d[0][0] / Math.max(n, m) < 0.4) return null; // a different word altogether
   let i = 0, j = 0;
   while (i < n && j < m && a[i] === b[j] && d[i][j] === d[i + 1][j + 1]) { i++; j++; }
-  for (let x = Math.min(i, n - 1); x >= 0; x--) if (at[x] != null) return at[x];
-  return null;
+  let x = Math.min(i, n - 1);
+  while (x > 0 && at[x] == null) x--;
+  const k = at[x];
+  if (k == null) return null;
+  // what was heard instead of that sound's letters: follow the cheapest path through them
+  let h = '';
+  i = x;
+  while (i < n && at[i] === k) {
+    if (j < m && d[i][j] === d[i + 1][j + 1] + (a[i] === b[j] ? 0 : 1)) { h += b[j]; i++; j++; }
+    else if (j < m && d[i][j] === d[i][j + 1] + 1) h += b[j++];
+    else i++;
+  }
+  return { k, h };
 }
 
 /** The word with its letters coloured by how each sound came out; the letters of sound `focus` underlined. */
@@ -143,7 +157,8 @@ function spelled(word, chunks, w, focus) {
   if (!chunks) return `<b>${esc(word)}</b>`;
   return '<b class="sp">' + chunks.map((c) => {
     const ss = w.ph ? c.p.map((i) => w.ph[i] && w.ph[i].s).filter((v) => v != null) : [];
-    const cls = [ss.length ? band(Math.min(...ss)) : '', focus != null && c.p.includes(focus) ? 'f' : ''].join(' ').trim();
+    // phoneme levels: letters of sounds that are not scored stay white
+    const cls = [ss.length ? band(Math.min(...ss)) : w.ph ? 'x' : '', focus != null && c.p.includes(focus) ? 'f' : ''].join(' ').trim();
     return cls ? `<span class="${cls}">${esc(c.t)}</span>` : esc(c.t);
   }).join('') + '</b>';
 }
@@ -161,17 +176,21 @@ export function explain(w, phones) {
     // phoneme levels: the worst sound of the word, if one stands out
     const bad = w.ph.map((x, i) => ({ ...x, i })).filter((x) => x.s != null && x.s < 80).sort((a, b) => a.s - b.s)[0];
     if (bad) ({ i: k, h: heard } = bad);
-  } else if (w.heard && chunks && w.c !== 'g') k = diffAt(word, w.heard, chunks);
+  } else if (w.heard && chunks && w.c !== 'g') {
+    // web level: the letters it heard differently
+    const dd = diffAt(word, w.heard, chunks);
+    if (dd) ({ k, h: heard } = dd);
+  }
   const head = spelled(word, chunks, w, k);
   if (k == null) return { key: w.c === 'g' || w.s == null ? null : w.ph ? 'cons' : 'missed', head, body: null };
-  const key = issueAt(phones, k, heard);
+  const key = issueAt(phones, k, heard || null);
   const own = chunks && chunks.find((c) => c.p.includes(k));
   const letters = own ? own.t.toLowerCase() : SOUND[phones[k]] ? SOUND[phones[k]][1] : '?';
   const l = `<b class="${w.ph ? band(w.ph[k].s) : w.c}">${esc(letters)}</b>`;
   let body;
   if (key === 'es') body = t('snd_es', { w: word.toLowerCase() });
   else {
-    const seen = w.ph && heard && heard !== phones[k] ? looks(heard) : null;
+    const seen = w.ph ? (heard && heard !== phones[k] ? looks(heard) : null) : heard ? { l: heard } : null;
     const ex = SOUND[phones[k]] && SOUND[phones[k]][2];
     // read as it is written ("is" said with an s): say what it sounds like here instead
     const said = seen && seen.l === letters && ex && ex !== word.toLowerCase() ? t('snd_should', { x: ex })
