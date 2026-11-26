@@ -282,7 +282,7 @@ function renderPage(n, url) {
     `<meta property="og:title" content="${escapeHtml(ogTitle)}">`,
     `<meta property="og:description" content="${escapeHtml(desc)}">`,
     `<meta property="og:url" content="${canon}">`,
-    `<meta property="og:image" content="${cfg.baseUrl}/assets/og${OG_V}/${dare ? score : 'default'}.jpg">`,
+    `<meta property="og:image" content="${cfg.baseUrl}/assets/og${OG_V}/${dare ? score : 'default2'}.jpg">`, // default2: with the mascot
     `<meta property="og:image:type" content="image/jpeg">`,
     `<meta property="og:image:width" content="1200">`,
     `<meta property="og:image:height" content="630">`,

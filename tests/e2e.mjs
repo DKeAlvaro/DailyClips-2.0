@@ -160,7 +160,8 @@ if (shared && shared.url) {
   const imgRes = await fetch(img.replace(/^https?:\/\/[^/]+/, base));
   ok(img.endsWith(`/${shown}.jpg`) && imgRes.ok && imgRes.headers.get('content-type') === 'image/jpeg', 'link preview shows the picture of that score', img);
   const plain = await (await fetch(`${base}/c/${clip.n}`)).text();
-  ok(/og:image" content="[^"]*\/default\.jpg"/.test(plain), 'a plain link gets the default picture', (/og:title" content="([^"]*)"/.exec(plain) || [])[1]);
+  const plainImg = (/og:image" content="([^"]*)"/.exec(plain) || [])[1] || '';
+  ok(/\/default\d*\.jpg$/.test(plainImg) && (await fetch(plainImg.replace(/^https?:\/\/[^/]+/, base))).ok, 'a plain link gets the default picture', (/og:title" content="([^"]*)"/.exec(plain) || [])[1] + ' · ' + plainImg.replace(/^.*\//, ''));
   await b.page.goto(shared.url.replace(/^https?:\/\/[^/]+/, base), { waitUntil: 'domcontentloaded' });
   await b.page.waitForSelector('.vsline', { timeout: 10000 });
   const txt = await b.page.evaluate(() => document.querySelector('.start').innerText);

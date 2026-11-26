@@ -6,7 +6,8 @@
 const SKIN = '#f4c6a5', SHADE = '#e2a582', HAIR = '#c4572f', HAIR2 = '#9a3f20', BROW = '#6d2914', INK = '#2a1610', LIP = '#7a2b22', TONGUE = '#ff8a76';
 
 // data-m: the moods an element belongs to (i idle, h happy, w wow, a almost, o oops, l listen, t talk)
-const ART = `<svg class="mascot" viewBox="0 0 100 100" aria-hidden="true">
+// (also drawn into the link-preview image by tools/make-og.mjs)
+export const ART = `<svg class="mascot" viewBox="0 0 100 100" aria-hidden="true">
 <path fill="${SKIN}" d="M43.5 62h13v24h-13z"/><path fill="${SHADE}" d="M43.5 64h13v8.5q-6.5 4.5-13 0z"/>
 <path fill="#2e4a50" d="M14 100c0-11 10-18.4 24-19.6 3 3.6 21 3.6 24 0 14 1.2 24 8.6 24 19.6z"/>
 <path fill="none" stroke="#4b6c71" stroke-width="2" d="M38.4 80.6c3 3.6 20.2 3.6 23.2 0"/>
