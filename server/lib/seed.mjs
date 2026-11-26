@@ -42,10 +42,14 @@ function player(i, salt = 0) {
   };
 }
 
-/** How many people a day would have played: a slow ramp from the first clip, with gentle waves. */
-function target(n) {
+/**
+ * How many of them play that clip: about half the accounts on the first day, creeping up to most of
+ * them over three weeks, with gentle waves so no two days are the same.
+ */
+function target(n, accounts) {
   const d = n - 1;
-  return Math.max(9, Math.min(MAX_DAY, 12 + 5 * d + Math.round(3 * Math.sin(d * 1.3 + 0.4))));
+  const ramp = 0.5 + 0.4 * Math.min(1, d / 20) + 0.03 * Math.sin(d * 1.3 + 0.4);
+  return Math.max(9, Math.min(accounts, MAX_DAY, Math.round(accounts * ramp)));
 }
 
 /**
@@ -132,7 +136,7 @@ export function createSeed({ q, tx, log = () => {} }) {
     let added = 0;
     const done = [];
     for (const clip of scope) {
-      const want = Math.min(clip.n === todayN && today != null ? today : target(clip.n), accounts.length, MAX_DAY);
+      const want = Math.min(clip.n === todayN && today != null ? today : target(clip.n, accounts.length), MAX_DAY);
       if (!want) continue;
       const have = new Set(q('SELECT user_id FROM results WHERE clip_n = ? AND user_id IN (SELECT id FROM users WHERE seed = 1)')
         .all(clip.n).map((r) => r.user_id));
